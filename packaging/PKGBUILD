@@ -1,0 +1,39 @@
+# Maintainer: Sebastian
+#
+# Se construye desde el árbol del proyecto (la carpeta de arriba): no hace falta copiar archivos.
+#   cd packaging && makepkg -si
+# Si querés ícono, poné tu Logo.svg en data/ antes de construir.
+
+pkgname=gestor-stock
+pkgver=2.2.1
+pkgrel=1
+pkgdesc="Gestor de stock simple hecho con Qt6/C++ y SQLite"
+arch=('x86_64')
+license=('GPL3')
+
+depends=(
+    'qt6-base'      # Widgets, SQL y el driver de SQLite
+    'zlib'          # para leer los .xlsx
+)
+makedepends=(
+    'cmake'
+    'ninja'
+)
+optdepends=(
+    'qt6-translations: botones estándar (Aceptar, Cancelar, Sí, No...) en español'
+)
+
+source=()
+sha256sums=()
+
+build() {
+    cmake -S "$startdir/.." -B "$srcdir/build" -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DBUILD_TESTING=OFF
+    cmake --build "$srcdir/build"
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install "$srcdir/build"
+}

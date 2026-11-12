@@ -1,0 +1,27 @@
+find_package(Qt6 REQUIRED COMPONENTS Test)
+
+# gs_test(nombre biblioteca): prueba que usa el núcleo (gsnucleo) o también las pantallas (gsescritorio)
+function(gs_test nombre biblioteca)
+    add_executable(${nombre} ${nombre}.cpp)
+    target_link_libraries(${nombre} PRIVATE ${biblioteca} Qt6::Test)
+    target_compile_definitions(${nombre} PRIVATE DATOS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data")
+    add_test(NAME ${nombre} COMMAND ${nombre})
+    set_tests_properties(${nombre} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endfunction()
+
+gs_test(tst_util gsnucleo)
+gs_test(tst_db gsnucleo)
+gs_test(tst_sinc gsnucleo)
+if(GS_MOVIL)
+    gs_test(tst_movil gsmovil)
+    target_link_libraries(tst_movil PRIVATE gsmovilplugin)
+endif()
+if(GS_ESCRITORIO)
+    gs_test(tst_importar gsescritorio)
+    gs_test(tst_portapapeles gsescritorio)
+    gs_test(tst_ventana gsescritorio)
+
+    # Herramienta para comparar con la versión en Python (no es una prueba): volcar_importacion planilla.xlsx
+    add_executable(volcar_importacion volcar_importacion.cpp)
+    target_link_libraries(volcar_importacion PRIVATE gsescritorio)
+endif()

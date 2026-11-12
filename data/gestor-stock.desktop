@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Stock-Krocante
+Comment=Control de inventario y stock
+Exec=gestor-stock
+Icon=Logo
+Terminal=false
+Categories=Office;

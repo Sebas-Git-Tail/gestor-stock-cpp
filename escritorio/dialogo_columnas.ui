@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>DialogoColumnas</class>
+ <widget class="QDialog" name="DialogoColumnas">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>640</width>
+    <height>480</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Columnas de la tabla</string>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
+  </property>
+  <layout class="QVBoxLayout" name="layoutDialogo">
+   <item>
+    <widget class="QLabel" name="labelAyuda">
+     <property name="text">
+      <string>Tildá las columnas que querés ver en la tabla. Las columnas que agregues las completás en cada producto. También podés cambiar el orden arrastrando los títulos de la tabla.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="layoutCentro">
+     <item>
+      <widget class="QListWidget" name="listaColumnas">
+       <property name="alternatingRowColors">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <layout class="QVBoxLayout" name="layoutBotones">
+       <item>
+        <widget class="QPushButton" name="btnAgregar">
+         <property name="text">
+          <string>&amp;Agregar columna…</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnRenombrar">
+         <property name="text">
+          <string>&amp;Renombrar…</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnTipo">
+         <property name="toolTip">
+          <string>Solo las columnas que agregaste vos: texto, número o fecha</string>
+         </property>
+         <property name="text">
+          <string>Cambiar &amp;tipo…</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnSubir">
+         <property name="text">
+          <string>Su&amp;bir</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnBajar">
+         <property name="text">
+          <string>&amp;Bajar</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnEliminar">
+         <property name="toolTip">
+          <string>Nombre, Precios y Cantidad no se pueden eliminar: el programa los necesita para vender, comprar y buscar</string>
+         </property>
+         <property name="text">
+          <string>&amp;Eliminar…</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="espaciador">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnRestaurar">
+         <property name="toolTip">
+          <string>Vuelve a poner una columna del programa que se había quitado, con todo lo que tenía cargado</string>
+         </property>
+         <property name="text">
+          <string>Volver a &amp;poner una quitada…</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="botones">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Close</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>botones</sender>
+   <signal>rejected()</signal>
+   <receiver>DialogoColumnas</receiver>
+   <slot>reject()</slot>
+  </connection>
+ </connections>
+</ui>

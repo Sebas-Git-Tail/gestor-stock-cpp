@@ -1,0 +1,36 @@
+# Compilaciones
+build/
+build-*/
+.cxx/
+.gradle/
+CMakeLists.txt.user*
+# makepkg
+/pkg/
+/src/
+*.pkg.tar.zst
+*.pkg.tar.xz
+# Binarios y paquetes generados
+*.apk
+*.aab
+*.exe
+*.dll
+*.tar
+*.zip
+*.so
+*.a
+*.o
+# Claves y secretos
+*.keystore
+*.jks
+*.clave
+*.pem
+*.key
+*.p12
+.env
+# Varios
+*.log
+log.txt
+
+# makepkg
+packaging/pkg/
+packaging/src/
