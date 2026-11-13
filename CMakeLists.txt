@@ -20,15 +20,20 @@ endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Core Sql Network)
 
+# Código compartido (repo comun-qt, traído con git subtree a comun/): la sincronización cifrada
+# PC ↔ celular, la misma que usa ingresos-gastos
+set(COMUN_SINC ON)
+add_subdirectory(comun)
+
 # El núcleo lo comparten las dos versiones: base de datos, búsqueda, columnas y sincronización
 add_library(gsnucleo STATIC
     nucleo/modelos.h
     nucleo/util.h nucleo/util.cpp
     nucleo/db.h nucleo/db_interno.h nucleo/db.cpp nucleo/db_operaciones.cpp nucleo/db_importacion.cpp nucleo/db_sinc.cpp
-    nucleo/sincronizacion.h nucleo/sincronizacion.cpp
+    nucleo/sincronizacion.h
 )
 target_include_directories(gsnucleo PUBLIC nucleo)
-target_link_libraries(gsnucleo PUBLIC Qt6::Core Qt6::Sql Qt6::Network)
+target_link_libraries(gsnucleo PUBLIC Qt6::Core Qt6::Sql Qt6::Network comun_sinc)
 target_compile_definitions(gsnucleo PUBLIC GS_VERSION="${PROJECT_VERSION}")
 if(NOT MSVC)
     target_compile_options(gsnucleo PRIVATE -Wall -Wextra)

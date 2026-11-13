@@ -1,4 +1,5 @@
 #pragma once
+#include "base.h"          // Par, ResultadoAplicar y BaseSinc (comun/sinc)
 #include "modelos.h"
 #include <QDateTime>
 #include <QJsonArray>
@@ -20,28 +21,6 @@ struct ResultadoOperacion {
     double total = 0;          // suma de las ventas (en compras queda en 0)
 };
 
-/** Otro dispositivo con el que se sincroniza (en la PC: los celulares; en el celular: la PC). */
-struct Par {
-    QString dispositivo;            // identificador del otro dispositivo
-    QString nombre;                 // "PC (casa)", "Celular"
-    QString secreto;                // clave compartida que se acordó al emparejar
-    QString host;                   // (celular) dirección de la PC
-    int puerto = 0;
-    qint64 enviado = 0;             // (celular) hasta qué cambio local ya le mandé
-    qint64 recibido = 0;            // (celular) hasta qué cambio de la PC ya recibí
-    QDateTime ultimaSinc;
-};
-
-struct ResultadoAplicar {
-    bool ok = true;
-    QString error;
-    int aplicadas = 0;              // filas del otro que cambiaron algo acá
-    int ignoradas = 0;              // filas que no se pudieron usar (dato roto)
-    QStringList aceptadas;          // uuids que se tomaron del otro (no hace falta devolvérselos)
-    QStringList ganadorasLocales;   // filas donde la versión de acá es más nueva, o que acá se tuvieron
-                                    // que cambiar (código repetido...): hay que mandarlas
-};
-
 /**
  * Capa de datos (SQLite). La usan la versión de escritorio y la del celular.
  *
@@ -56,14 +35,14 @@ struct ResultadoAplicar {
  * antes de sincronizar, «gana el último» perdería una de las dos): se calcula sumando todos los movimientos de
  * stock (ajustes manuales + compras - ventas), que sí viajan completos y nunca se pisan.
  */
-class Stock
+class Stock : public BaseSinc
 {
 public:
     static QString rutaPorDefecto();                 // Linux: ~/.local/share/gestor-stock/stock.db
     static constexpr int VERSION_ESQUEMA = 4;
 
     explicit Stock(const QString& ruta);             // ":memory:" para pruebas
-    ~Stock();
+    ~Stock() override;
     Stock(const Stock&) = delete;
     Stock& operator=(const Stock&) = delete;
 
@@ -110,17 +89,17 @@ public:
     Resultado backup(const QString& destino);
 
     // ---- sincronización
-    QString dispositivo() const { return dispositivo_; }
-    QString nombreDispositivo() const;
+    QString dispositivo() const override { return dispositivo_; }
+    QString nombreDispositivo() const override;
     void setNombreDispositivo(const QString& nombre);
-    qint64 secuencia() const;                                     // último número de cambio local
-    QJsonArray cambiosDesde(qint64 desde) const;                  // todo lo que cambió después de ese número
-    QJsonArray filasPorUuid(const QStringList& uuids) const;
-    ResultadoAplicar aplicarCambios(const QJsonArray& filas);     // lo que mandó el otro (gana lo más nuevo)
+    qint64 secuencia() const override;                                     // último número de cambio local
+    QJsonArray cambiosDesde(qint64 desde) const override;                  // todo lo que cambió después de ese número
+    QJsonArray filasPorUuid(const QStringList& uuids) const override;
+    ResultadoAplicar aplicarCambios(const QJsonArray& filas) override;     // lo que mandó el otro (gana lo más nuevo)
 
     QList<Par> pares() const;
-    std::optional<Par> par(const QString& dispositivo) const;
-    void guardarPar(const Par& p);
+    std::optional<Par> par(const QString& dispositivo) const override;
+    void guardarPar(const Par& p) override;
     void eliminarPar(const QString& dispositivo);
 
 private:
