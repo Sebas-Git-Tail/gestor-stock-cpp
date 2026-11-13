@@ -18,7 +18,9 @@ fi
 IN=$(find "$BUILD" -name '*-release-unsigned.apk' -print -quit)
 [ -n "$IN" ] || { echo "No encontré el APK sin firmar en $BUILD (¿compilaste con --target apk?)"; exit 1; }
 VER=$(grep -oP 'android:versionName="\K[^"]+' "$(dirname "$IN")"/../../../../AndroidManifest.xml 2>/dev/null || echo app)
-OUT="$BUILD/gestor-stock-movil-$VER.apk"
+SALIDA="$(dirname "$(realpath "$0")")/../Salida"   # lo compilado queda en Salida/
+mkdir -p "$SALIDA"
+OUT="$SALIDA/gestor-stock-movil-$VER.apk"
 TMP=$(mktemp --suffix=.apk)
 "$BT/zipalign" -f -p 4 "$IN" "$TMP"
 "$BT/apksigner" sign --ks "$KS" --ks-key-alias gestorstock --ks-pass file:"$PASSF" --out "$OUT" "$TMP" 2>/dev/null

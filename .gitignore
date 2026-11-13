@@ -34,3 +34,6 @@ log.txt
 # makepkg
 packaging/pkg/
 packaging/src/
+
+# Lo compilado (APK, paquetes, .tar para Windows)
+/Salida/
