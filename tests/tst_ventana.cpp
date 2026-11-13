@@ -2,9 +2,11 @@
 #include "dialogocolumnas.h"
 #include "dialogooperacion.h"
 #include "dialogoproducto.h"
+#include "dialogoreportes.h"
 #include "dialogosincronizacion.h"
 #include "portapapeles.h"
 #include "sincronizacion.h"
+#include "util.h"
 #include "ventanaprincipal.h"
 #include <QAbstractItemView>
 #include <QClipboard>
@@ -1058,6 +1060,38 @@ private slots:
         QVERIFY(copia > N);
         QVERIFY(esVisible(*w, copia));
         QVERIFY(w->tabla()->verticalScrollBar()->value() > 0);
+    }
+
+    // ---------------------------------------------------------------- 2.3.0: reportes, avisos y costo
+    void compraConCostoYReporte()
+    {
+        DialogoOperacion compra(TipoOperacion::Compra, stock_->listar(), {id(0)});
+        compra.fijarCantidad(0, 4);
+        compra.fijarPrecio(0, 600);                               // en la compra, el costo de cada uno
+        QCOMPARE(compra.total(), 2400.0);
+        QVERIFY(stock_->registrarOperacion(TipoOperacion::Compra, compra.lineas()).ok);
+        QVERIFY(stock_->registrarOperacion(TipoOperacion::Venta, {{id(0), 2, "500 g", 1000}}).ok);
+
+        DialogoReportes r(*stock_, DialogoReportes::Pestana::Reportes);
+        r.elegirPeriodo(0);                                        // hoy
+        QCOMPARE(r.textoVentas(), formatearPrecio(2000));
+        QCOMPARE(r.textoGanancia(), formatearPrecio(2000 - 2 * 600));
+    }
+
+    void avisoArribaDeLaTabla()
+    {
+        auto w = abrir();
+        auto* aviso = w->findChild<QLabel*>("labelAvisos");
+        QVERIFY(aviso);
+        QVERIFY(aviso->isHidden());                                // ninguno tiene mínimo ni vencimiento
+        Producto p = *stock_->obtener(id(3));
+        p.stockMinimo = 50;
+        QVERIFY(stock_->actualizar(p).ok);
+        w->refrescar();
+        QVERIFY(!aviso->isHidden());
+        QVERIFY(aviso->text().contains("poco stock"));
+        DialogoReportes r(*stock_, DialogoReportes::Pestana::Avisos);
+        QCOMPARE(r.cantidadAvisos(), 1);
     }
 };
 

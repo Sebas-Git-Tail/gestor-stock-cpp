@@ -51,6 +51,8 @@ public slots:
     void acercaDe();
     void columnas();              // ventana para agregar, renombrar, ordenar y eliminar columnas
     void abrirSincronizacion();   // ventana para emparejar el celular
+    void abrirReportes(bool avisos = false);   // ventas, ganancia y avisos de stock y vencimientos
+    void actualizarAvisos();      // el aviso arriba de la tabla («⚠ 3 avisos: …»)
     void copiar();                // Ctrl+C: los renglones seleccionados al portapapeles
     void pegar();                 // Ctrl+V: los renglones del portapapeles como productos nuevos
 

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>DialogoReportes</class>
+ <widget class="QDialog" name="DialogoReportes">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>760</width><height>560</height></rect></property>
+  <property name="windowTitle"><string>Reportes y avisos</string></property>
+  <layout class="QVBoxLayout" name="layoutPrincipal">
+   <item>
+    <layout class="QHBoxLayout" name="layoutPeriodo">
+     <item><widget class="QLabel" name="labelPeriodo"><property name="text"><string>Período:</string></property><property name="buddy"><cstring>comboPeriodo</cstring></property></widget></item>
+     <item><widget class="QComboBox" name="comboPeriodo"/></item>
+     <item><widget class="QLabel" name="labelDesde"><property name="text"><string>desde</string></property></widget></item>
+     <item><widget class="QDateEdit" name="editDesde"><property name="calendarPopup"><bool>true</bool></property><property name="displayFormat"><string>dd/MM/yyyy</string></property></widget></item>
+     <item><widget class="QLabel" name="labelHasta"><property name="text"><string>hasta</string></property></widget></item>
+     <item><widget class="QDateEdit" name="editHasta"><property name="calendarPopup"><bool>true</bool></property><property name="displayFormat"><string>dd/MM/yyyy</string></property></widget></item>
+     <item><spacer name="espacioPeriodo"><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property></spacer></item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="layoutTotales">
+     <item row="0" column="0"><widget class="QLabel" name="tituloVentas"><property name="text"><string>Ventas</string></property></widget></item>
+     <item row="0" column="1"><widget class="QLabel" name="tituloCompras"><property name="text"><string>Compras</string></property></widget></item>
+     <item row="0" column="2"><widget class="QLabel" name="tituloGanancia"><property name="text"><string>Ganancia estimada</string></property></widget></item>
+     <item row="1" column="0"><widget class="QLabel" name="labelVentas"/></item>
+     <item row="1" column="1"><widget class="QLabel" name="labelCompras"/></item>
+     <item row="1" column="2"><widget class="QLabel" name="labelGanancia"/></item>
+     <item row="2" column="0"><widget class="QLabel" name="labelDetalleVentas"/></item>
+     <item row="2" column="1"><widget class="QLabel" name="labelDetalleCompras"/></item>
+     <item row="2" column="2"><widget class="QLabel" name="labelDetalleGanancia"><property name="wordWrap"><bool>true</bool></property></widget></item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QTabWidget" name="pestanas">
+     <widget class="QWidget" name="pestanaMasVendidos">
+      <attribute name="title"><string>Más vendidos</string></attribute>
+      <layout class="QVBoxLayout" name="layoutMasVendidos"><item><widget class="QTableWidget" name="tablaMasVendidos"/></item></layout>
+     </widget>
+     <widget class="QWidget" name="pestanaMeses">
+      <attribute name="title"><string>Por mes</string></attribute>
+      <layout class="QVBoxLayout" name="layoutMeses"><item><widget class="QTableWidget" name="tablaMeses"/></item></layout>
+     </widget>
+     <widget class="QWidget" name="pestanaDias">
+      <attribute name="title"><string>Por día</string></attribute>
+      <layout class="QVBoxLayout" name="layoutDias"><item><widget class="QTableWidget" name="tablaDias"/></item></layout>
+     </widget>
+     <widget class="QWidget" name="pestanaAvisos">
+      <attribute name="title"><string>Avisos</string></attribute>
+      <layout class="QVBoxLayout" name="layoutAvisos">
+       <item><widget class="QLabel" name="labelAvisos"><property name="wordWrap"><bool>true</bool></property></widget></item>
+       <item><widget class="QTableWidget" name="tablaAvisos"/></item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="buttonBox"><property name="standardButtons"><set>QDialogButtonBox::StandardButton::Close</set></property></widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections>
+  <connection><sender>buttonBox</sender><signal>rejected()</signal><receiver>DialogoReportes</receiver><slot>reject()</slot></connection>
+ </connections>
+</ui>

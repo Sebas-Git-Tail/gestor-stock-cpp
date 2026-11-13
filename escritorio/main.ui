@@ -46,6 +46,16 @@
      </layout>
     </item>
     <item>
+     <widget class="QLabel" name="labelAvisos">
+      <property name="toolTip">
+       <string>Productos con poco stock, vencidos o por vencer</string>
+      </property>
+      <property name="textFormat">
+       <enum>Qt::TextFormat::RichText</enum>
+      </property>
+     </widget>
+    </item>
+    <item>
      <widget class="QTableView" name="tablaProductos">
       <property name="contextMenuPolicy">
        <enum>Qt::CustomContextMenu</enum>
@@ -151,6 +161,11 @@
   <action name="actionSincronizar">
    <property name="text">
     <string>Sincronizar con el celular…</string>
+   </property>
+  </action>
+  <action name="actionReportes">
+   <property name="text">
+    <string>Reportes y avisos…</string>
    </property>
   </action>
   <action name="actionAcerca">

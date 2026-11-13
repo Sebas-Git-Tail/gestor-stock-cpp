@@ -41,10 +41,13 @@ DialogoOperacion::DialogoOperacion(TipoOperacion tipo, const QList<Producto>& pr
     for (int c = 0; c < 7; ++c) tabla->setColumnWidth(c, anchos[c]);
     tabla->horizontalHeader()->setSectionResizeMode(ColProducto, QHeaderView::Stretch);
     if (!venta_) {
+        // Compra: sin presentación, pero con el costo de cada uno (opcional: sirve para calcular la
+        // ganancia en ☰ → Reportes)
         tabla->setColumnHidden(ColPresentacion, true);
-        tabla->setColumnHidden(ColPrecio, true);
-        tabla->setColumnHidden(ColSubtotal, true);
-        ui->labelTotal->setVisible(false);
+        if (auto* titulo = tabla->horizontalHeaderItem(ColPrecio)) {
+            titulo->setText(tr("Costo c/u"));
+            titulo->setToolTip(tr("Opcional: cuánto pagaste cada uno. Con esto, Reportes calcula la ganancia."));
+        }
     }
 
     // Buscador de productos: escribir para filtrar; acepta mayúsculas, tildes y un pedazo del nombre
@@ -160,6 +163,16 @@ void DialogoOperacion::agregarProducto(qint64 id)
     }
     tabla->setItem(fila, ColVence, vence);
 
+    if (!venta_) {
+        auto* costo = new QDoubleSpinBox;
+        costo->setDecimals(2);
+        costo->setRange(0, 1e9);
+        costo->setPrefix(QStringLiteral("$ "));
+        costo->setSpecialValueText(tr("(sin cargar)"));
+        costo->setToolTip(tr("Opcional: cuánto pagaste cada uno"));
+        tabla->setCellWidget(fila, ColPrecio, costo);
+        connect(costo, &QDoubleSpinBox::valueChanged, this, [this](double) { recalcular(); });
+    }
     if (venta_) {
         auto* presentaciones = new QComboBox;
         if (p.precios.isEmpty()) {
@@ -221,24 +234,22 @@ void DialogoOperacion::recalcular()
     for (int f = 0; f < ui->tablaLineas->rowCount(); ++f) {
         const int cantidad = spinCantidad(f)->value();
         auto* nombre = ui->tablaLineas->item(f, ColProducto);
-        if (venta_) {
-            const double subtotal = cantidad * spinPrecio(f)->value();
-            total += subtotal;
-            ui->tablaLineas->item(f, ColSubtotal)->setText(formatearPrecio(subtotal));
-        }
+        const double subtotal = cantidad * spinPrecio(f)->value();
+        total += subtotal;
+        ui->tablaLineas->item(f, ColSubtotal)->setText(venta_ || subtotal > 0 ? formatearPrecio(subtotal) : QString());
         const bool sinStock = cantidad <= 0;
         nombre->setForeground(sinStock ? QBrush(QColor(190, 30, 30)) : QBrush());
         if (sinStock) todoBien = false;
     }
     total = std::round(total * 100.0) / 100.0;
-    ui->labelTotal->setText(tr("Total: %1").arg(formatearPrecio(total)));
+    ui->labelTotal->setText(venta_ ? tr("Total: %1").arg(formatearPrecio(total))
+                                   : tr("Total de la compra: %1").arg(formatearPrecio(total)));
     ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(todoBien);
 }
 
 double DialogoOperacion::total() const
 {
     double total = 0;
-    if (!venta_) return 0;
     for (int f = 0; f < ui->tablaLineas->rowCount(); ++f) total += spinCantidad(f)->value() * spinPrecio(f)->value();
     return std::round(total * 100.0) / 100.0;
 }
@@ -250,10 +261,9 @@ QList<LineaOperacion> DialogoOperacion::lineas() const
         LineaOperacion l;
         l.productoId = ui->tablaLineas->item(f, ColProducto)->data(ROL_ID).toLongLong();
         l.cantidad = spinCantidad(f)->value();
-        if (venta_) {
+        l.precioUnitario = spinPrecio(f)->value();      // compra: el costo (0 = no se cargó)
+        if (venta_)
             l.presentacion = comboPresentacion(f)->currentData(ROL_PRESENTACION).toString();
-            l.precioUnitario = spinPrecio(f)->value();
-        }
         res.append(l);
     }
     return res;

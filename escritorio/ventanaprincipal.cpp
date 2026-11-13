@@ -3,6 +3,7 @@
 #include "dialogocolumnas.h"
 #include "dialogooperacion.h"
 #include "dialogoproducto.h"
+#include "dialogoreportes.h"
 #include "dialogosincronizacion.h"
 #include "importarexcel.h"
 #include "portapapeles.h"
@@ -121,6 +122,7 @@ void VentanaPrincipal::armarMenu()
     }
     auto* menu = new QMenu(this);
     menu->addAction(ui->actionColumnas);
+    menu->addAction(ui->actionReportes);
     menu->addAction(ui->actionSincronizar);
     menu->addSeparator();
     menu->addAction(ui->actionImportar);
@@ -147,6 +149,8 @@ void VentanaPrincipal::conectar()
     connect(ui->actionAcerca, &QAction::triggered, this, &VentanaPrincipal::acercaDe);
     connect(ui->actionColumnas, &QAction::triggered, this, &VentanaPrincipal::columnas);
     connect(ui->actionSincronizar, &QAction::triggered, this, &VentanaPrincipal::abrirSincronizacion);
+    connect(ui->actionReportes, &QAction::triggered, this, [this] { abrirReportes(false); });
+    connect(ui->labelAvisos, &QLabel::linkActivated, this, [this] { abrirReportes(true); });
     ui->tablaProductos->installEventFilter(this);   // Ctrl+C y Ctrl+V cuando la tabla tiene el foco
 
     // Sincronización con el celular: si se dejó activada, arranca sola
@@ -394,6 +398,7 @@ void VentanaPrincipal::refrescar()
     }
     buscando_ = buscandoAhora;
     filtroAnterior_ = filtro;
+    actualizarAvisos();
 }
 
 // ====================================================================== acciones
@@ -829,4 +834,31 @@ void VentanaPrincipal::abrirSincronizacion()
 {
     DialogoSincronizacion dlg(*stock_, *servidor_, ajustes_, this);
     dlg.exec();
+}
+
+void VentanaPrincipal::abrirReportes(bool avisos)
+{
+    DialogoReportes dialogo(*stock_, avisos ? DialogoReportes::Pestana::Avisos : DialogoReportes::Pestana::Reportes, this);
+    dialogo.exec();
+}
+
+void VentanaPrincipal::actualizarAvisos()
+{
+    const QList<Alerta> avisos = stock_->alertas();
+    if (avisos.isEmpty()) {
+        ui->labelAvisos->hide();
+        return;
+    }
+    int poco = 0, vencidos = 0, porVencer = 0;
+    for (const Alerta& a : avisos) {
+        if (a.tipo == Alerta::Tipo::StockBajo) ++poco;
+        else if (a.tipo == Alerta::Tipo::Vencido) ++vencidos;
+        else ++porVencer;
+    }
+    QStringList partes;
+    if (poco) partes << tr("%n con poco stock", nullptr, poco);
+    if (vencidos) partes << tr("%n vencido(s)", nullptr, vencidos);
+    if (porVencer) partes << tr("%n por vencer", nullptr, porVencer);
+    ui->labelAvisos->setText(QStringLiteral("⚠ %1 · <a href=\"avisos\">Ver</a>").arg(partes.join(QStringLiteral(" · "))));
+    ui->labelAvisos->show();
 }
