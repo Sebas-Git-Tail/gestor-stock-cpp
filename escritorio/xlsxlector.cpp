@@ -1,5 +1,6 @@
 #include "xlsxlector.h"
 
+#include <QTimeZone>
 #include <QFile>
 #include <QHash>
 #include <QRegularExpression>
@@ -162,7 +163,7 @@ QDateTime desdeSerial(double v, bool epoca1904)
     const double fraccion = v - dias;
     const QDate base = epoca1904 ? QDate(1904, 1, 1) : (dias < 61 ? QDate(1899, 12, 31) : QDate(1899, 12, 30));
     const qint64 ms = qint64(std::llround(fraccion * 86400000.0));
-    return QDateTime(base.addDays(int(dias)), QTime(0, 0).addMSecs(int(ms % 86400000)), Qt::UTC);
+    return QDateTime(base.addDays(int(dias)), QTime(0, 0).addMSecs(int(ms % 86400000)), QTimeZone::UTC);
 }
 
 // "B12" -> columna 1, fila 11 (índices desde 0)

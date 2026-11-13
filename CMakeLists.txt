@@ -24,7 +24,7 @@ find_package(Qt6 REQUIRED COMPONENTS Core Sql Network)
 add_library(gsnucleo STATIC
     nucleo/modelos.h
     nucleo/util.h nucleo/util.cpp
-    nucleo/db.h nucleo/db.cpp
+    nucleo/db.h nucleo/db_interno.h nucleo/db.cpp nucleo/db_operaciones.cpp nucleo/db_importacion.cpp nucleo/db_sinc.cpp
     nucleo/sincronizacion.h nucleo/sincronizacion.cpp
 )
 target_include_directories(gsnucleo PUBLIC nucleo)
