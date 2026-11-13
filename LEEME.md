@@ -31,6 +31,15 @@ Poné tu `Logo.svg` en `data/` antes de construir (el `.desktop` usa `Icon=Logo`
 Además: la búsqueda ignora mayúsculas y tildes (`azucar` encuentra `AZÚCAR`), y cada venta/compra queda
 guardada en la base (tablas `operaciones` y `operacion_items`) con fecha y total.
 
+## Versión 2.3.0
+| Pedido | Cómo quedó |
+|---|---|
+| Reportes | ☰ → **Reportes y avisos…** (en el celular: Opciones → Reportes y avisos): ventas, compras y **ganancia estimada** de hoy, la semana, el mes, el mes anterior, el año o las fechas que elijas; lo **más vendido**, ventas **por mes** y **por día** |
+| Ganancia | En la **compra** se puede cargar el **costo** de cada uno (opcional). La ganancia es lo vendido menos lo que costó, con el costo promedio de las compras de cada producto. Si algo se vendió sin costo cargado, se avisa y no entra en la cuenta |
+| Avisos de stock bajo y vencimientos | Arriba de la tabla (y arriba de la lista en el celular) aparece «⚠ 2 con poco stock · 1 por vencer · Ver» cuando un producto está en su **stock mínimo** o por debajo, está **vencido** o **vence en 30 días** (si queda alguno) |
+| Código de barras en el celular | Botón **Escanear** arriba (busca el producto) y en la venta/compra (lo agrega directo). Usa el lector de Google Play Services: no pide permiso de cámara; la primera vez lo baja (hace falta internet). En la PC, un lector USB escribe el código en el buscador como si fuera un teclado |
+| Sincronización cifrada | El emparejamiento ya no deja adivinar el código escuchando la red y todo viaja **cifrado**. **Hay que emparejar de nuevo una vez** el celular con la PC (el celular lo avisa): Opciones → Sincronizar con la PC → Olvidar esta PC, y emparejar con un código nuevo. Actualizar **los dos** (PC y celular) |
+
 ## Versión 2.2.1
 | Pedido | Cómo quedó |
 |---|---|
@@ -68,14 +77,25 @@ Al pegar:
 ## Dónde está cada cosa
 | Archivo | Qué hace |
 |---|---|
-| `escritorio/*.ui` | Las pantallas: **se editan en Qt Designer** y se convierten en código al compilar |
-| `escritorio/ventanaprincipal.cpp` | Tabla, búsqueda, posición recordada, acciones, copiar y pegar |
+| `nucleo/` | Lo que comparten la PC y el celular |
+| `nucleo/db.cpp` | SQLite: apertura, migraciones, columnas y productos |
+| `nucleo/db_operaciones.cpp` | Ventas, compras, reportes y avisos |
+| `nucleo/db_importacion.cpp` | Importación desde Excel y copia de seguridad |
+| `nucleo/db_sinc.cpp` | Lo que se intercambia al sincronizar y los equipos emparejados |
+| `nucleo/db_interno.h` | Ayudantes que comparten esos cuatro archivos |
+| `nucleo/sincronizacion.h` | Puertos y nombre para la sincronización; el protocolo (cifrado) está en `comun/sinc` |
+| `nucleo/util.cpp` | Precios, vencimientos y búsqueda (texto y precio) |
+| `comun/` | Código compartido con otros programas ([comun-qt](https://github.com/Sebas-Git-Tail/comun-qt), traído con `git subtree`): **no editar acá**, sino en comun-qt |
+| `escritorio/*.ui` | Las pantallas de la PC: **se editan en Qt Designer** y se convierten en código al compilar |
+| `escritorio/ventanaprincipal.cpp` | Tabla, búsqueda, posición recordada, avisos, acciones, copiar y pegar |
 | `escritorio/dialogooperacion.cpp` | Ventana de venta / compra |
+| `escritorio/dialogoreportes.cpp` | Reportes y avisos |
 | `escritorio/portapapeles.cpp` | Convierte renglones a texto (para otros programas) y texto a productos |
-| `escritorio/db.cpp` | SQLite: productos, precios, operaciones, migraciones, importación |
-| `escritorio/util.cpp` | Precios, vencimientos y búsqueda (texto y precio) |
 | `escritorio/xlsxlector.cpp`, `importarexcel.cpp` | Importación desde Excel (sin librerías externas) |
-| `tests/` | 5 suites de pruebas (QtTest) |
+| `movil/qml/*.qml` | Las pantallas del celular |
+| `movil/controlador.cpp` | Lo que usan las pantallas del celular (en QML se llama `App`) |
+| `movil/android/` | Íconos, `build.gradle` (con el lector de códigos de Google) y `Escaner.java` |
+| `tests/` | 7 suites de pruebas (QtTest); `tst_movil` se compila con `-DGS_MOVIL=ON` |
 
 Si renombrás un widget en Designer, hay que cambiarlo también en el `.cpp` (el compilador avisa).
 

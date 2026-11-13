@@ -1,0 +1,21 @@
+# Compila la PC y la versión del celular (para la PC) y corre todas las pruebas en un Arch Linux limpio.
+name: Compilar y probar
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  arch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Dependencias
+        run: pacman -Syu --noconfirm --needed git cmake ninja gcc qt6-base qt6-declarative zlib
+      - uses: actions/checkout@v4
+      - name: Compilar
+        run: |
+          cmake -S . -B build -G Ninja -DGS_MOVIL=ON
+          cmake --build build
+      - name: Pruebas
+        run: QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
