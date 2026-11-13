@@ -82,6 +82,11 @@ public:
     ResultadoOperacion registrarOperacion(TipoOperacion tipo, const QList<LineaOperacion>& lineas);
     QList<Operacion> operaciones(int limite = 100) const;
 
+    // ---- reportes y avisos
+    Reporte reporte(const QDate& desde, const QDate& hasta) const;     // ventas, compras y ganancia del período
+    QList<Alerta> alertas(int diasVencimiento = 30, const QDate& hoy = QDate::currentDate()) const;
+    double costoPromedio(qint64 productoId) const;                     // de las compras con costo; 0 si no hay
+
     // ---- importación desde Excel
     QPair<int, int> previsualizarImportacion(const QList<ProductoImportado>& productos) const;  // (nuevos, existentes)
     QPair<int, int> importar(const QList<ProductoImportado>& productos);                         // (nuevos, actualizados)

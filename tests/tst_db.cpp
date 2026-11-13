@@ -585,6 +585,86 @@ private slots:
         Stock copia(dir.filePath("copias/copia.db"));
         QCOMPARE(copia.listar().first().nombre, QString("Yerba"));
     }
+
+    // ---- 2.3.0: costo en las compras, reportes y avisos
+
+    void compraGuardaElCostoYElTotal()
+    {
+        Stock s(":memory:");
+        const qint64 id = s.crear(producto("Avena", 0, {{"500 g", 4000}})).id;
+        const ResultadoOperacion r = s.registrarOperacion(TipoOperacion::Compra, {{id, 10, QString(), 2500}});
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QCOMPARE(r.total, 25000.0);
+        QCOMPARE(s.obtener(id)->cantidad, 10);
+        QCOMPARE(s.operaciones(1).first().items.first().precioUnitario, 2500.0);
+        // Una compra sin costo no cambia el promedio; otra con costo distinto sí (ponderado por cantidad)
+        QVERIFY(s.registrarOperacion(TipoOperacion::Compra, {{id, 5, QString(), 0}}).ok);
+        QVERIFY(s.registrarOperacion(TipoOperacion::Compra, {{id, 10, QString(), 3500}}).ok);
+        QCOMPARE(s.costoPromedio(id), 3000.0);
+    }
+
+    void reporteDeVentasYGanancia()
+    {
+        Stock s(":memory:");
+        const qint64 avena = s.crear(producto("Avena", 0, {{"500 g", 4000}})).id;
+        const qint64 sal = s.crear(producto("Sal", 20, {{"", 300}})).id;      // sin compras: sin costo
+        QVERIFY(s.registrarOperacion(TipoOperacion::Compra, {{avena, 10, QString(), 2500}}).ok);
+        QVERIFY(s.registrarOperacion(TipoOperacion::Venta, {{avena, 3, "500 g", 4000}, {sal, 2, QString(), 300}}).ok);
+        QVERIFY(s.registrarOperacion(TipoOperacion::Venta, {{avena, 1, "500 g", 3800}}).ok);
+
+        const QDate hoy = QDate::currentDate();
+        const Reporte r = s.reporte(hoy.addDays(-1), hoy);
+        QCOMPARE(r.cantidadVentas, 2);
+        QCOMPARE(r.ventas, 3.0 * 4000 + 2 * 300 + 3800);
+        QCOMPARE(r.compras, 25000.0);
+        QCOMPARE(r.unidadesVendidas, 6);
+        QCOMPARE(r.unidadesSinCosto, 2);                       // las 2 de sal
+        QCOMPARE(r.ventasConCosto, 3.0 * 4000 + 3800);
+        QCOMPARE(r.costoDeLoVendido, 4.0 * 2500);
+        QCOMPARE(r.ganancia, 3.0 * 4000 + 3800 - 4 * 2500);
+        QCOMPARE(r.masVendidos.first().nombre, QStringLiteral("Avena"));
+        QCOMPARE(r.masVendidos.first().cantidad, 4);
+        QCOMPARE(r.ventasPorDia.size(), 1);
+        QCOMPARE(r.ventasPorDia.first().first, hoy);
+        QCOMPARE(r.ventasPorMes.size(), 1);
+        QCOMPARE(r.ventasPorMes.first().first, hoy.toString("yyyy-MM"));
+
+        // Otro período: nada
+        const Reporte vacio = s.reporte(hoy.addDays(-30), hoy.addDays(-2));
+        QCOMPARE(vacio.cantidadVentas, 0);
+        QCOMPARE(vacio.ventas, 0.0);
+        QVERIFY(vacio.masVendidos.isEmpty());
+    }
+
+    void alertasDeStockYVencimiento()
+    {
+        Stock s(":memory:");
+        const QDate hoy(2026, 11, 13);
+        Producto poco = producto("Avena", 2, {});
+        poco.stockMinimo = 5;
+        Producto nada = producto("Harina", 0, {});
+        nada.stockMinimo = 1;
+        Producto bien = producto("Sal", 10, {});
+        bien.stockMinimo = 3;
+        Producto vencido = producto("Yogur", 4, {});
+        vencido.vencimiento = "2026-11-01";
+        Producto porVencer = producto("Queso", 4, {});
+        porVencer.vencimiento = "2026-11-20";
+        Producto lejos = producto("Arroz", 4, {});
+        lejos.vencimiento = "2027-06-01";
+        Producto vencidoSinStock = producto("Leche", 0, {});
+        vencidoSinStock.vencimiento = "2026-10-01";
+        for (const Producto& p : {poco, nada, bien, vencido, porVencer, lejos, vencidoSinStock}) QVERIFY(s.crear(p).ok);
+
+        const QList<Alerta> a = s.alertas(30, hoy);
+        QStringList textos;
+        for (const Alerta& x : a) textos << x.nombre + ": " + x.detalle;
+        QCOMPARE(textos, (QStringList{"Harina: sin stock (mínimo 1)", "Avena: quedan 2 (mínimo 5)",
+                                      "Yogur: venció el 01/11/2026", "Queso: vence en 7 días"}));
+        QCOMPARE(a.at(2).tipo, Alerta::Tipo::Vencido);
+        QCOMPARE(a.at(3).tipo, Alerta::Tipo::PorVencer);
+        QCOMPARE(s.alertas(3, hoy).size(), 3);                // el queso todavía no
+    }
 };
 
 QTEST_MAIN(TstDb)

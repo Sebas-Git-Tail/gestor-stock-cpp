@@ -1,4 +1,6 @@
 #pragma once
+#include <QDate>
+#include <QPair>
 #include <QHash>
 #include <QList>
 #include <QString>
@@ -111,7 +113,7 @@ struct LineaOperacion {
     qint64 productoId = 0;
     int cantidad = 0;
     QString presentacion;      // qué presentación se vendió ("500 g")
-    double precioUnitario = 0; // solo se usa en ventas
+    double precioUnitario = 0; // venta: precio de cada uno. Compra: cuánto costó cada uno (0 = no se cargó)
 };
 
 struct ItemOperacion {
@@ -127,4 +129,38 @@ struct Operacion {
     QString fecha;
     double total = 0;
     QList<ItemOperacion> items;
+};
+
+// Lo más vendido de un período
+struct ProductoVendido {
+    QString nombre;
+    int cantidad = 0;
+    double importe = 0;
+};
+
+// Reporte de un período (ver Stock::reporte)
+struct Reporte {
+    QDate desde, hasta;
+    double ventas = 0;               // importe vendido
+    double compras = 0;              // importe comprado (solo lo que tiene costo cargado)
+    int cantidadVentas = 0;          // cuántas ventas (operaciones)
+    int unidadesVendidas = 0;
+    // Ganancia estimada: lo vendido menos lo que costó, con el costo promedio de las compras de cada
+    // producto. Lo vendido de productos sin costo cargado no entra (se avisa con unidadesSinCosto).
+    double ventasConCosto = 0;
+    double costoDeLoVendido = 0;
+    double ganancia = 0;
+    int unidadesSinCosto = 0;
+    QList<QPair<QDate, double>> ventasPorDia;     // solo los días con ventas, en orden
+    QList<QPair<QString, double>> ventasPorMes;   // "2026-11", en orden
+    QList<ProductoVendido> masVendidos;           // los 10 con más unidades
+};
+
+// Avisos: poco stock, vencido o por vencer (ver Stock::alertas)
+struct Alerta {
+    enum class Tipo { StockBajo, Vencido, PorVencer };
+    Tipo tipo = Tipo::StockBajo;
+    qint64 productoId = 0;
+    QString nombre;
+    QString detalle;                 // "quedan 2 (mínimo 5)", "venció el 01/11/2026", "vence en 12 días"
 };
