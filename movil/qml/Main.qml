@@ -37,6 +37,12 @@ ApplicationWindow {
     }
     Timer { interval: 1500; running: true; onTriggered: App.sincronizarSiCorresponde() }
 
+    // Código de barras leído desde la pantalla principal: se busca (en la de venta/compra lo maneja esa página)
+    Connections {
+        target: App
+        function onCodigoEscaneado(codigo) { if (codigo !== "" && pila.depth === 1) App.busqueda = codigo }
+    }
+
     // Mensajito abajo («Producto guardado», «Sincronizado…»)
     function avisar(texto) { aviso.texto = texto; aviso.open() }
     Connections { target: App; function onAviso(texto) { ventana.avisar(texto) } }
@@ -73,6 +79,12 @@ ApplicationWindow {
                 placeholderTextColor: "#c8e6c9"
             }
             ToolButton {
+                text: "Escanear"
+                visible: App.puedeEscanear
+                onClicked: App.escanearCodigo()
+                Accessible.name: "Buscar con el código de barras"
+            }
+            ToolButton {
                 text: App.sincronizando ? "Sinc…" : "Sinc"
                 visible: App.pcEmparejada
                 enabled: !App.sincronizando
@@ -95,6 +107,7 @@ ApplicationWindow {
                     { texto: "Columnas de la tabla", accion: "columnas" },
                     { texto: "Registrar una venta", accion: "venta" },
                     { texto: "Registrar una compra", accion: "compra" },
+                    { texto: "Reportes y avisos", accion: "reportes" },
                     { texto: "Sincronizar con la PC", accion: "sinc" },
                     { texto: "Acerca de", accion: "acerca" }
                 ]
@@ -113,6 +126,8 @@ ApplicationWindow {
         else if (accion === "venta") pila.push(paginaOperacion, { venta: true })
         else if (accion === "compra") pila.push(paginaOperacion, { venta: false })
         else if (accion === "sinc") pila.push(paginaSinc)
+        else if (accion === "reportes") pila.push(paginaReportes)
+        else if (accion === "avisos") pila.push(paginaReportes, { verAvisos: true })
         else if (accion === "acerca") acerca.open()
     }
     function editar(id) { pila.push(editor, { idProducto: id }) }
@@ -126,6 +141,14 @@ ApplicationWindow {
                 anchors.fill: parent
                 spacing: 0
                 Label { text: App.resumen; color: ventana.tintaSecundaria; Layout.margins: 10; font.pixelSize: 13 }
+                // Avisos: poco stock, vencidos o por vencer (tocar abre la lista)
+                ItemDelegate {
+                    Layout.fillWidth: true
+                    visible: App.resumenAlertas !== ""
+                    text: "⚠ " + App.resumenAlertas + " · Ver"
+                    onClicked: ventana.abrir("avisos")
+                    background: Rectangle { color: ventana.oscuro ? "#5a4d10" : "#fff1aa" }
+                }
                 ListView {
                     id: lista
                     Layout.fillWidth: true
@@ -180,6 +203,7 @@ ApplicationWindow {
     Component { id: paginaColumnas; PaginaColumnas {} }
     Component { id: paginaOperacion; PaginaOperacion {} }
     Component { id: paginaSinc; PaginaSincronizacion {} }
+    Component { id: paginaReportes; PaginaReportes {} }
 
     Dialog {
         id: acerca

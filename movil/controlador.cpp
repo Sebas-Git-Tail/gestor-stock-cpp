@@ -2,7 +2,15 @@
 #include "sincronizacion.h"
 #include "util.h"
 
+#include <QDate>
 #include <QJSEngine>
+#include <QLocale>
+#include <QPointer>
+#ifdef Q_OS_ANDROID
+#include <QCoreApplication>
+#include <QJniEnvironment>
+#include <QJniObject>
+#endif
 #include <QQmlEngine>
 #include <algorithm>
 
@@ -276,13 +284,13 @@ QVariantMap Controlador::registrarOperacion(bool venta, const QVariantList& line
         l.productoId = m.value(QStringLiteral("id")).toLongLong();
         l.cantidad = m.value(QStringLiteral("cantidad")).toInt();
         l.presentacion = m.value(QStringLiteral("presentacion")).toString();
-        if (venta) {
-            double precio = 0;
-            const QString t = m.value(QStringLiteral("precio")).toString().trimmed();
-            if (!t.isEmpty() && !parsearPrecio(t, &precio))
-                return QVariantMap{{"ok", false}, {"error", QStringLiteral("El precio «%1» no es un número válido.").arg(t)}};
-            l.precioUnitario = precio;
-        }
+        // Venta: el precio de cada uno. Compra: el costo de cada uno (opcional, para la ganancia en Reportes)
+        double precio = 0;
+        const QString t = m.value(QStringLiteral("precio")).toString().trimmed();
+        if (!t.isEmpty() && !parsearPrecio(t, &precio))
+            return QVariantMap{{"ok", false}, {"error", (venta ? QStringLiteral("El precio «%1» no es un número válido.")
+                                                               : QStringLiteral("El costo «%1» no es un número válido.")).arg(t)}};
+        l.precioUnitario = precio;
         ls << l;
     }
     const ResultadoOperacion r = stock_.registrarOperacion(venta ? TipoOperacion::Venta : TipoOperacion::Compra, ls);
@@ -372,4 +380,130 @@ void Controlador::olvidarPc()
     for (const Par& p : stock_.pares()) stock_.eliminarPar(p.dispositivo);
     estadoSinc_.clear();
     emit sincCambio();
+}
+
+// ---------------------------------------------------------------- reportes y avisos
+
+QVariantList Controlador::alertas() const
+{
+    QVariantList lista;
+    for (const Alerta& a : stock_.alertas())
+        lista << QVariantMap{{"id", a.productoId}, {"nombre", a.nombre}, {"detalle", a.detalle},
+                             {"grave", a.tipo != Alerta::Tipo::PorVencer}};
+    return lista;
+}
+
+QString Controlador::resumenAlertas() const
+{
+    int poco = 0, vencidos = 0, porVencer = 0;
+    for (const Alerta& a : stock_.alertas()) {
+        if (a.tipo == Alerta::Tipo::StockBajo) ++poco;
+        else if (a.tipo == Alerta::Tipo::Vencido) ++vencidos;
+        else ++porVencer;
+    }
+    QStringList partes;
+    if (poco) partes << QStringLiteral("%1 con poco stock").arg(poco);
+    if (vencidos) partes << (vencidos == 1 ? QStringLiteral("1 vencido") : QStringLiteral("%1 vencidos").arg(vencidos));
+    if (porVencer) partes << QStringLiteral("%1 por vencer").arg(porVencer);
+    return partes.join(QStringLiteral(" · "));
+}
+
+QVariantMap Controlador::reporte(int periodo) const
+{
+    const QDate hoy = QDate::currentDate();
+    QDate desde = hoy, hasta = hoy;
+    switch (periodo) {
+    case 1: desde = hoy.addDays(-6); break;
+    case 2: desde = QDate(hoy.year(), hoy.month(), 1); break;
+    case 3: desde = QDate(hoy.year(), hoy.month(), 1).addMonths(-1); hasta = desde.addMonths(1).addDays(-1); break;
+    case 4: desde = QDate(hoy.year(), 1, 1); break;
+    default: break;
+    }
+    const Reporte r = stock_.reporte(desde, hasta);
+    QVariantList masVendidos;
+    for (const ProductoVendido& p : r.masVendidos)
+        masVendidos << QVariantMap{{"nombre", p.nombre}, {"cantidad", p.cantidad}, {"importe", formatearPrecio(p.importe)}};
+    QVariantList meses;
+    for (const auto& [mes, importe] : r.ventasPorMes) {
+        const QDate d = QDate::fromString(mes + QStringLiteral("-01"), Qt::ISODate);
+        QString nombre = d.isValid() ? QLocale().standaloneMonthName(d.month()) + u' ' + QString::number(d.year()) : mes;
+        if (!nombre.isEmpty()) nombre[0] = nombre[0].toUpper();
+        meses << QVariantMap{{"mes", nombre}, {"importe", formatearPrecio(importe)}};
+    }
+    QString nota;
+    if (r.unidadesSinCosto > 0)
+        nota = QStringLiteral("%1 unidad(es) vendida(s) sin costo cargado no entran en la ganancia: cargá el costo al registrar las compras.")
+                   .arg(r.unidadesSinCosto);
+    return QVariantMap{
+        {"periodo", desde == hasta ? QLocale().toString(desde, QStringLiteral("dd/MM/yyyy"))
+                                   : QLocale().toString(desde, QStringLiteral("dd/MM/yyyy")) + QStringLiteral(" al ")
+                                         + QLocale().toString(hasta, QStringLiteral("dd/MM/yyyy"))},
+        {"ventas", formatearPrecio(r.ventas)},
+        {"detalleVentas", QStringLiteral("%1 venta(s), %2 unidades").arg(r.cantidadVentas).arg(r.unidadesVendidas)},
+        {"compras", formatearPrecio(r.compras)},
+        {"ganancia", r.ventasConCosto > 0 ? formatearPrecio(r.ganancia) : QStringLiteral("—")},
+        {"nota", nota},
+        {"masVendidos", masVendidos},
+        {"meses", meses},
+    };
+}
+
+// ---------------------------------------------------------------- código de barras
+
+#ifdef Q_OS_ANDROID
+namespace {
+QPointer<Controlador> escaneando;
+
+// Lo llama Escaner.java (en el hilo de Android): se pasa al hilo de la app
+void codigoDesdeJava(JNIEnv*, jclass, jstring codigo, jstring error)
+{
+    const QString c = QJniObject(codigo).toString(), e = QJniObject(error).toString();
+    QMetaObject::invokeMethod(qApp, [c, e] { if (escaneando) escaneando->recibirCodigo(c, e); }, Qt::QueuedConnection);
+}
+
+bool registrarMetodosNativos()
+{
+    static bool hecho = false;
+    if (hecho) return true;
+    const JNINativeMethod metodos[] = {
+        {"resultado", "(Ljava/lang/String;Ljava/lang/String;)V", reinterpret_cast<void*>(codigoDesdeJava)}};
+    QJniEnvironment entorno;
+    hecho = entorno.registerNativeMethods("ar/gestorstock/app/Escaner", metodos, 1);
+    return hecho;
+}
+}
+#endif
+
+bool Controlador::puedeEscanear() const
+{
+#ifdef Q_OS_ANDROID
+    return true;
+#else
+    return false;
+#endif
+}
+
+void Controlador::escanearCodigo()
+{
+#ifdef Q_OS_ANDROID
+    if (!registrarMetodosNativos()) {
+        emit aviso(QStringLiteral("No se pudo abrir el lector de códigos."));
+        return;
+    }
+    escaneando = this;
+    QJniObject::callStaticMethod<void>("ar/gestorstock/app/Escaner", "escanear", "(Landroid/content/Context;)V",
+                                       QNativeInterface::QAndroidApplication::context());
+    QJniEnvironment().checkAndClearExceptions();
+#else
+    emit aviso(QStringLiteral("El lector de códigos de barras está solo en el celular."));
+#endif
+}
+
+void Controlador::recibirCodigo(const QString& codigo, const QString& error)
+{
+    if (!error.isEmpty()) {
+        emit aviso(QStringLiteral("No se pudo leer el código: %1").arg(error));
+        return;
+    }
+    emit codigoEscaneado(codigo);
 }

@@ -21,8 +21,9 @@ Page {
         const ls = lineas.slice()
         for (const l of ls) if (l.id === p.id) { l.cantidad += 1; lineas = ls; return }
         const pre = p.precios.length > 0 ? p.precios[0] : { presentacion: "", texto: "" , precio: 0 }
+        // Compra: el precio es el costo de cada uno (opcional), arranca vacío
         ls.push({ id: p.id, nombre: p.nombre, stock: p.cantidad, cantidad: 1, presentacion: pre.presentacion,
-                  precio: pre.precio ? String(pre.precio).replace(".", ",") : "", presets: p.precios })
+                  precio: venta && pre.precio ? String(pre.precio).replace(".", ",") : "", presets: p.precios })
         lineas = ls
         campoBuscar.text = ""
         resultados = []
@@ -46,12 +47,26 @@ Page {
         anchors.fill: parent
         anchors.margins: 12
         spacing: 8
-        TextField {
-            id: campoBuscar
+        RowLayout {
             Layout.fillWidth: true
-            placeholderText: "Buscar un producto para agregar…"
-            inputMethodHints: Qt.ImhNoPredictiveText
-            onDisplayTextChanged: pagina.resultados = displayText.trim() === "" ? [] : App.buscarProductos(displayText)
+            TextField {
+                id: campoBuscar
+                Layout.fillWidth: true
+                placeholderText: "Buscar un producto para agregar…"
+                inputMethodHints: Qt.ImhNoPredictiveText
+                onDisplayTextChanged: pagina.resultados = displayText.trim() === "" ? [] : App.buscarProductos(displayText)
+            }
+            Button { text: "Escanear"; visible: App.puedeEscanear; onClicked: App.escanearCodigo() }
+        }
+        // Código de barras leído: si es de un solo producto se agrega directo; si no, queda buscado
+        Connections {
+            target: App
+            function onCodigoEscaneado(codigo) {
+                if (codigo === "") return
+                const r = App.buscarProductos(codigo)
+                if (r.length === 1) pagina.agregar(r[0])
+                else { campoBuscar.text = codigo; if (r.length === 0) ventana.avisar("Ningún producto tiene el código " + codigo) }
+            }
         }
         ListView {
             Layout.fillWidth: true
@@ -95,9 +110,8 @@ Page {
                         Button { text: "+"; onClicked: { const l = pagina.lineas.slice(); l[index].cantidad += 1; pagina.lineas = l } }
                         Item { Layout.fillWidth: true }
                         TextField {
-                            visible: pagina.venta
                             implicitWidth: 120
-                            placeholderText: "Precio"
+                            placeholderText: pagina.venta ? "Precio" : "Costo c/u"
                             text: modelData.precio
                             inputMethodHints: Qt.ImhFormattedNumbersOnly
                             onTextEdited: { const l = pagina.lineas.slice(); l[index].precio = text; pagina.lineas = l }
@@ -122,7 +136,19 @@ Page {
             Label { anchors.centerIn: parent; visible: listaLineas.count === 0; color: ventana.tintaApagada; text: "Buscá los productos arriba para agregarlos." }
         }
         Label { id: error; Layout.fillWidth: true; color: "#e34948"; wrapMode: Text.WordWrap; visible: text !== "" }
-        Label { visible: pagina.venta; text: "Total: " + App.precioTexto(pagina.total); font.pixelSize: 22; font.bold: true }
+        Label {
+            visible: pagina.venta || pagina.total > 0
+            text: (pagina.venta ? "Total: " : "Total de la compra: ") + App.precioTexto(pagina.total)
+            font.pixelSize: 22; font.bold: true
+        }
+        Label {
+            visible: !pagina.venta
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            color: ventana.tintaApagada
+            font.pixelSize: 12
+            text: "El costo es opcional: con él, Reportes calcula la ganancia."
+        }
         Button {
             Layout.fillWidth: true
             text: pagina.venta ? "Confirmar venta" : "Confirmar compra"

@@ -36,6 +36,9 @@ class Controlador : public QObject
     Q_PROPERTY(QString nombreDispositivo READ nombreDispositivo WRITE setNombreDispositivo NOTIFY sincCambio)
     Q_PROPERTY(int puertoPorDefecto READ puertoPorDefecto CONSTANT)
     Q_PROPERTY(QString version READ version CONSTANT)
+    Q_PROPERTY(QVariantList alertas READ alertas NOTIFY cambio)          // poco stock, vencidos y por vencer
+    Q_PROPERTY(QString resumenAlertas READ resumenAlertas NOTIFY cambio)  // "2 con poco stock · 1 por vencer"
+    Q_PROPERTY(bool puedeEscanear READ puedeEscanear CONSTANT)           // lector de códigos de barras (solo Android)
 
 public:
     explicit Controlador(Stock& stock, QObject* parent = nullptr);
@@ -60,6 +63,9 @@ public:
     void setNombreDispositivo(const QString& n);
     int puertoPorDefecto() const;
     QString version() const;
+    QVariantList alertas() const;
+    QString resumenAlertas() const;
+    bool puedeEscanear() const;
 
     // ---- productos (filas). Los que devuelven QString dan "" si salió bien; si no, el error
     Q_INVOKABLE QVariantMap producto(qint64 id) const;        // para el editor; id 0 = uno vacío
@@ -77,7 +83,14 @@ public:
     Q_INVOKABLE QString restaurarColumna(qint64 id);
 
     // ---- ventas y compras: lineas = [{id, cantidad, presentacion, precio}] -> {ok, error, total}
-    Q_INVOKABLE QVariantMap registrarOperacion(bool venta, const QVariantList& lineas);
+    Q_INVOKABLE QVariantMap registrarOperacion(bool venta, const QVariantList& lineas);   // compra: "precio" = costo c/u (opcional)
+
+    // ---- reportes. periodo: 0 hoy, 1 últimos 7 días, 2 este mes, 3 mes anterior, 4 este año
+    Q_INVOKABLE QVariantMap reporte(int periodo) const;
+
+    // ---- código de barras: abre el lector de Google (Play Services); el resultado llega por codigoEscaneado
+    Q_INVOKABLE void escanearCodigo();
+    void recibirCodigo(const QString& codigo, const QString& error);    // lo llama Java (Escaner.java)
 
     // ---- sincronización
     Q_INVOKABLE void emparejar(const QString& host, int puerto, const QString& codigo);
@@ -98,6 +111,7 @@ signals:
     void pcEncontrada(const QString& nombre, const QString& host, int puerto);
     void busquedaTerminada();
     void sincTerminada(bool ok, const QString& mensaje);
+    void codigoEscaneado(const QString& codigo);     // vacío si se canceló
 
 private:
     void programarSincronizacion();                  // un rato después de cada cambio, si hay PC emparejada

@@ -13,6 +13,7 @@ qt_add_qml_module(gsmovil
         qml/PaginaColumnas.qml
         qml/PaginaOperacion.qml
         qml/PaginaSincronizacion.qml
+        qml/PaginaReportes.qml
     SOURCES
         controlador.h controlador.cpp
 )

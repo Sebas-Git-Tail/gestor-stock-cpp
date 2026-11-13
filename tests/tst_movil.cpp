@@ -1,5 +1,6 @@
 // Pruebas de la app del celular: el controlador y las pantallas QML.
 #include "controlador.h"
+#include "util.h"
 #include "db.h"
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
@@ -94,7 +95,11 @@ private slots:
         auto* ventana = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
         QVERIFY(QTest::qWaitForWindowExposed(ventana));
         QTest::qWait(100);
-        for (const char* accion : {"columnas", "venta", "compra", "sinc"}) {
+        // Un producto con poco stock: aparece el aviso y la página de avisos tiene algo
+        QVariantMap conMinimo = c.producto(0);
+        conMinimo["nombre"] = "Harina"; conMinimo["cantidad"] = "1"; conMinimo["stockMinimo"] = "4";
+        c.guardarProducto(conMinimo);
+        for (const char* accion : {"columnas", "venta", "compra", "sinc", "reportes", "avisos"}) {
             QMetaObject::invokeMethod(ventana, "abrir", Q_ARG(QVariant, QVariant(accion)));
             QTest::qWait(200);
         }
@@ -104,6 +109,27 @@ private slots:
         QTest::qWait(200);
         QVERIFY2(advertencias.isEmpty(), qPrintable(advertencias.join('\n')));
         Controlador::setInstancia(nullptr);
+    }
+
+    void reportesYAvisos()
+    {
+        Stock s(":memory:");
+        Controlador c(s);
+        QVariantMap p = c.producto(0);
+        p["nombre"] = "Avena"; p["cantidad"] = "0"; p["stockMinimo"] = "2";
+        QCOMPARE(c.guardarProducto(p), QString());
+        const qint64 id = c.productos().first().toMap().value("id").toLongLong();
+        QCOMPARE(c.resumenAlertas(), QString("1 con poco stock"));
+        // Compra con costo y una venta
+        QVERIFY(c.registrarOperacion(false, {QVariantMap{{"id", id}, {"cantidad", 10}, {"precio", "1.000,50"}}}).value("ok").toBool());
+        QVERIFY(!c.registrarOperacion(false, {QVariantMap{{"id", id}, {"cantidad", 1}, {"precio", "mucho"}}}).value("ok").toBool());
+        QVERIFY(c.registrarOperacion(true, {QVariantMap{{"id", id}, {"cantidad", 2}, {"precio", "1500"}}}).value("ok").toBool());
+        QCOMPARE(c.resumenAlertas(), QString());              // ya hay stock (8 > 2)
+        const QVariantMap r = c.reporte(0);
+        QCOMPARE(r.value("ventas").toString(), formatearPrecio(3000));
+        QCOMPARE(r.value("compras").toString(), formatearPrecio(10005));
+        QCOMPARE(r.value("ganancia").toString(), formatearPrecio(3000 - 2 * 1000.5));
+        QCOMPARE(r.value("masVendidos").toList().size(), 1);
     }
 };
 
