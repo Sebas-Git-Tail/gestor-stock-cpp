@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>DialogoPistas</class>
+ <widget class="QDialog" name="DialogoPistas">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>520</width>
+    <height>760</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Calidad, códecs, audio y subtítulos</string>
+  </property>
+  <layout class="QVBoxLayout" name="layoutPrincipal">
+   <item>
+    <widget class="QGroupBox" name="grupoCalidad">
+     <property name="title">
+      <string>Calidad y códecs</string>
+     </property>
+     <layout class="QFormLayout" name="layoutCalidad">
+      <item row="0" column="0">
+       <widget class="QLabel" name="etiquetaComboCalidad">
+        <property name="text">
+         <string>Calidad:</string>
+        </property>
+        <property name="buddy">
+         <cstring>comboCalidad</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="comboCalidad">
+        <property name="toolTip">
+         <string>Altura máxima del video. Si un video no la tiene, se baja la más cercana por debajo.</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="etiquetaComboVcodec">
+        <property name="text">
+         <string>Códec de video:</string>
+        </property>
+        <property name="buddy">
+         <cstring>comboVcodec</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="comboVcodec">
+        <property name="toolTip">
+         <string>AV1 y VP9 ocupan menos; H.264 se puede reproducir en casi cualquier aparato.</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="etiquetaComboAcodec">
+        <property name="text">
+         <string>Códec de audio:</string>
+        </property>
+        <property name="buddy">
+         <cstring>comboAcodec</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QComboBox" name="comboAcodec"/>
+      </item>
+      <item row="3" column="0" colspan="2">
+       <widget class="QLabel" name="etiquetaCalidad">
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="grupoAudios">
+     <property name="title">
+      <string>Pistas de audio</string>
+     </property>
+     <layout class="QVBoxLayout" name="layoutAudios">
+      <item>
+       <widget class="QLabel" name="etiquetaAudios">
+        <property name="text">
+         <string>Marcá los idiomas que quieras: quedan todos dentro del video y la primera marcada es la que suena por defecto. Si no marcás ninguno, se baja la pista original.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QListWidget" name="listaAudios"/>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="layoutBotonesAudios">
+        <item>
+         <widget class="QPushButton" name="botonTodosAudios">
+          <property name="text">
+           <string>Marcar todas</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="espacioAudios">
+          <property name="orientation">
+           <enum>Qt::Orientation::Horizontal</enum>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="grupoSubtitulos">
+     <property name="title">
+      <string>Subtítulos</string>
+     </property>
+     <layout class="QVBoxLayout" name="layoutSubtitulos">
+      <item>
+       <widget class="QLabel" name="etiquetaSubtitulos">
+        <property name="text">
+         <string>Los que marques quedan incrustados en el video.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLineEdit" name="editFiltro">
+        <property name="placeholderText">
+         <string>Filtrar por idioma…</string>
+        </property>
+        <property name="clearButtonEnabled">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QListWidget" name="listaSubtitulos"/>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="checkAutomaticos">
+        <property name="text">
+         <string>Mostrar todas las traducciones automáticas</string>
+        </property>
+        <property name="toolTip">
+         <string>Sin marcar, de los subtítulos automáticos solo se ven los del idioma original y los traducidos al idioma del sistema</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="etiquetaAyuda">
+     <property name="text">
+      <string>En mpv, la tecla # cambia de pista de audio y la j de subtítulos.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="botones">
+     <property name="standardButtons">
+      <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Ok</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,45 @@
+# Compilaciones
+build/
+build-*/
+.cxx/
+.gradle/
+CMakeLists.txt.user*
+# makepkg
+/pkg/
+/src/
+*.pkg.tar.zst
+*.pkg.tar.xz
+# Binarios y paquetes generados
+*.apk
+*.aab
+*.exe
+*.dll
+*.tar
+*.zip
+*.so
+*.a
+*.o
+# Claves y secretos
+*.keystore
+*.jks
+*.clave
+*.pem
+*.key
+*.p12
+.env
+# Varios
+*.log
+log.txt
+
+# Capturas para reportar errores (privadas)
+/Respaldo real/
+/*.png
+# Binarios precompilados que arma Preparar-binarios.sh
+/android/libs/
+
+# Binarios que arma nativos/Compilar-nativos.sh
+/nativos/rsync
+/nativos/dbclient
+
+# Lo compilado (APK, paquetes, .tar para Windows)
+/Salida/
