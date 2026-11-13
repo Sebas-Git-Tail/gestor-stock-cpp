@@ -17,10 +17,18 @@ fi
 
 IN=$(find "$BUILD" -name '*-release-unsigned.apk' -print -quit)
 [ -n "$IN" ] || { echo "No encontré el APK sin firmar en $BUILD (¿compilaste con --target apk?)"; exit 1; }
-VER=$(grep -oP 'android:versionName="\K[^"]+' "$(dirname "$IN")"/../../../../AndroidManifest.xml 2>/dev/null || echo app)
+# La versión se lee del APK mismo y tiene que ser la del proyecto: si la compilación falló, en
+# build-android queda el APK anterior y antes se firmaba igual con el nombre de la versión nueva
+VER=$("$BT/aapt2" dump badging "$IN" 2>/dev/null | grep -oP "versionName='\K[^']+" || true)
+PROYECTO=$(grep -oP 'project\(gestor-stock VERSION \K[0-9.]+' "$(dirname "$(realpath "$0")")/../CMakeLists.txt")
+[ "$VER" = "$PROYECTO" ] || { echo "El APK de $BUILD es la versión «$VER», no la $PROYECTO: ¿falló la compilación?"; exit 1; }
 SALIDA="$(dirname "$(realpath "$0")")/../Salida"   # lo compilado queda en Salida/
 mkdir -p "$SALIDA"
 OUT="$SALIDA/gestor-stock-movil-$VER.apk"
+# Las versiones anteriores pasan a ~/Repo/Legacy/gestor-stock
+for viejo in "$SALIDA"/gestor-stock-movil-*.apk; do
+    if [ -e "$viejo" ] && [ "$viejo" != "$OUT" ]; then mkdir -p ~/Repo/Legacy/gestor-stock && mv "$viejo" ~/Repo/Legacy/gestor-stock/; fi
+done
 TMP=$(mktemp --suffix=.apk)
 "$BT/zipalign" -f -p 4 "$IN" "$TMP"
 "$BT/apksigner" sign --ks "$KS" --ks-key-alias gestorstock --ks-pass file:"$PASSF" --out "$OUT" "$TMP" 2>/dev/null

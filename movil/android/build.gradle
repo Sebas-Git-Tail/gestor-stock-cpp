@@ -25,6 +25,8 @@ dependencies {
     implementation 'androidx.core:core:1.16.0'
     // Lector de códigos de barras de Google (Play Services): no pide permiso de cámara, la pantalla la pone Google
     implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
+    // El lector trae kotlin-stdlib-jdk7/jdk8 viejos que chocan con kotlin-stdlib 1.8: el BOM los alinea
+    implementation platform('org.jetbrains.kotlin:kotlin-bom:1.8.22')
 }
 
 android {
