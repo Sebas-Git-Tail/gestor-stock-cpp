@@ -4,6 +4,7 @@
 #include "db.h"
 #include "util.h"
 
+#include <QCalendarWidget>
 #include <QHeaderView>
 #include <QLocale>
 #include <QTableWidget>
@@ -45,6 +46,8 @@ DialogoReportes::DialogoReportes(Stock& stock, Pestana pestana, QWidget* parent)
     : QDialog(parent), ui(new Ui::DialogoReportes), stock_(stock)
 {
     ui->setupUi(this);
+    for (QDateEdit *fecha : {ui->editDesde, ui->editHasta})
+        fecha->calendarWidget()->setFirstDayOfWeek(Qt::Sunday);   // igual que el vencimiento: la semana empieza el domingo
     QFont grande = ui->labelVentas->font();
     grande.setPointSizeF(grande.pointSizeF() * 1.6);
     grande.setBold(true);

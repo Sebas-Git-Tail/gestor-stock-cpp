@@ -2,6 +2,7 @@
 #include "ui_dialogo_producto.h"
 #include "util.h"
 
+#include <QCalendarWidget>
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -18,6 +19,7 @@ DialogoProducto::DialogoProducto(const QStringList& categorias, const QStringLis
     : QDialog(parent), ui(new Ui::DialogoProducto)
 {
     ui->setupUi(this);
+    ui->dateVencimiento->calendarWidget()->setFirstDayOfWeek(Qt::Sunday);   // pedido de la tía: la semana empieza el domingo
     ui->comboCategoria->addItems(categorias);
     ui->comboProveedor->addItems(proveedores);
     ui->tablaPrecios->setColumnWidth(0, 190);

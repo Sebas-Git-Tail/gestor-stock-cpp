@@ -13,7 +13,9 @@
 #include <QCompleter>
 #include <QMimeData>
 #include <QStatusBar>
+#include <QCalendarWidget>
 #include <QCheckBox>
+#include <QDateEdit>
 #include <QDialogButtonBox>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -396,6 +398,15 @@ private slots:
         QCOMPARE(r.precios.size(), 2);
         QCOMPARE(r.precios[1].precio, 3700.5);
         QCOMPARE(r.cantidad, 6);
+    }
+
+    void calendarioDeVencimientoEmpiezaElDomingo()
+    {
+        Producto p; p.nombre = "Yerba";
+        DialogoProducto d({}, {}, &p);
+        auto* fecha = d.findChild<QDateEdit*>("dateVencimiento");
+        QVERIFY(fecha && fecha->calendarWidget());
+        QCOMPARE(fecha->calendarWidget()->firstDayOfWeek(), Qt::Sunday);
     }
 
     void dialogoDeProductoNoAceptaPrecioInvalido()
