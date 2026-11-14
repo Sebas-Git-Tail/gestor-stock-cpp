@@ -432,7 +432,7 @@ QVariantMap Controlador::reporte(int periodo) const
     }
     QString nota;
     if (r.unidadesSinCosto > 0)
-        nota = QStringLiteral("%1 unidad(es) vendida(s) sin costo cargado no entran en la ganancia: cargá el costo al registrar las compras.")
+        nota = QStringLiteral("%1 unidad(es) vendida(s) sin costo no entran en la ganancia: cargá la «Ganancia %» del producto o el costo al registrar las compras.")
                    .arg(r.unidadesSinCosto);
     return QVariantMap{
         {"periodo", desde == hasta ? QLocale().toString(desde, QStringLiteral("dd/MM/yyyy"))

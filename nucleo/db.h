@@ -112,6 +112,7 @@ private:
     void llevarAEsquema3();                                       // bases de versiones muy viejas
     void migrarDesdeEsquema3();                                   // 2.1.0 -> 2.2.0: uuid, marcas de cambio, columnas, movimientos
     void crearColumnasBase();
+    void asegurarColumnaGanancia();
     bool existeTabla(const QString& nombre) const;
     QString config(const QString& clave, const QString& porDefecto = QString()) const;
     void fijarConfigLocal(const QString& clave, const QString& valor);

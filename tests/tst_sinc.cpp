@@ -164,7 +164,7 @@ private slots:
         QCOMPARE(resumen(e.pc), resumen(e.cel));
         QCOMPARE(e.cel.listar().size(), 3);
         QCOMPARE(e.pc.listar().size(), 3);
-        QCOMPARE(e.cel.columnas().size(), 10);     // las de fábrica no se duplican
+        QCOMPARE(e.cel.columnas().size(), 11);     // las de fábrica y «Ganancia %» no se duplican
         QCOMPARE(porNombre(e.cel, "Avena").cantidad, 10);
         QCOMPARE(porNombre(e.cel, "Avena").precios.size(), 2);
         QCOMPARE(porNombre(e.pc, "Yerba").codigo, QString("Y1"));
@@ -272,7 +272,7 @@ private slots:
         avena.extra = {{e.pc.columna(marca)->uuid, "Krocante"}, {e.pc.columna(peso)->uuid, "2,5"}};
         QVERIFY(e.pc.actualizar(avena).ok);
         QVERIFY(e.sincronizar().ok);
-        QCOMPARE(e.cel.columnas().size(), 12);
+        QCOMPARE(e.cel.columnas().size(), 13);
         QCOMPARE(resumen(e.pc), resumen(e.cel));
         QCOMPARE(porNombre(e.cel, "Avena").extra.size(), 2);
         QVERIFY(e.cel.listar("krocante").size() == 1);
@@ -295,7 +295,7 @@ private slots:
         QVERIFY(e.pc.eliminarColumna(e.pc.columnaPorClave("medida_bolsa")->id).ok);
         QVERIFY(e.sincronizar().ok);
         QCOMPARE(resumen(e.pc), resumen(e.cel));
-        QCOMPARE(e.cel.columnas().size(), 10);
+        QCOMPARE(e.cel.columnas().size(), 11);
         QCOMPARE(porNombre(e.cel, "Avena").extra.size(), 1);
         QVERIFY(!e.cel.columnaActiva(CLAVE_MEDIDA));
         QCOMPARE(e.cel.columnasQuitadas().size(), 1);
@@ -433,7 +433,7 @@ private slots:
         QCOMPARE(destino.listar().size(), 1);
         QCOMPARE(destino.listar().first().cantidad, 7);
         QCOMPARE(destino.operaciones().size(), 1);
-        QCOMPARE(destino.columnas().size(), 10);
+        QCOMPARE(destino.columnas().size(), 11);
         QCOMPARE(destino.listar().first().precios.size(), 1);
     }
 

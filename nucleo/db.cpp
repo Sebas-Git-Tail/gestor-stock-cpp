@@ -235,6 +235,7 @@ Stock::Stock(const QString& ruta)
             crearColumnasBase();
             t.confirmar();
         }
+        asegurarColumnaGanancia();
         abierta_ = true;
     } catch (const std::exception& e) {
         errorApertura_ = QString::fromUtf8(e.what());
@@ -378,6 +379,20 @@ void Stock::crearColumnasBase()
                  {QStringLiteral("col-") + QLatin1String(c.clave), QLatin1String(c.clave), QString::fromUtf8(c.nombre),
                   textoTipoColumna(c.tipo), orden++, c.visible ? 1 : 0, siguienteCambio()});
     }
+}
+
+// «Ganancia %» (ver UUID_COLUMNA_GANANCIA): se agrega una sola vez. Si ya existe (aunque se haya quitado, o llegó
+// por sincronización) no se toca. Fecha 1 y sin autor, como las de fábrica: la PC y el celular la crean idéntica.
+// Oculta en la tabla: se carga al editar el producto (se puede mostrar desde Columnas).
+void Stock::asegurarColumnaGanancia()
+{
+    const QString uuid = QString::fromLatin1(UUID_COLUMNA_GANANCIA);
+    if (valor(db_, "SELECT COUNT(*) FROM columnas WHERE uuid = ?", {uuid}).toInt() > 0) return;
+    Transaccion t(db_);
+    const int orden = valor(db_, "SELECT COALESCE(MAX(orden), -1) + 1 FROM columnas").toInt();
+    consulta(db_, "INSERT INTO columnas (uuid, clave, nombre, tipo, orden, visible, modificado, autor, cambio) VALUES (?, '', ?, ?, ?, 0, 1, '', ?)",
+             {uuid, QStringLiteral("Ganancia %"), textoTipoColumna(TipoColumna::Numero), orden, siguienteCambio()});
+    t.confirmar();
 }
 
 QString Stock::config(const QString& clave, const QString& porDefecto) const

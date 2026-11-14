@@ -8,6 +8,14 @@
 #include <QtTest>
 
 namespace {
+// «Ganancia %», si está puesta
+std::optional<Columna> columnaGanancia(const Stock& s)
+{
+    for (const Columna& c : s.columnas())
+        if (c.uuid == QLatin1String(UUID_COLUMNA_GANANCIA)) return c;
+    return std::nullopt;
+}
+
 Producto producto(const QString& nombre, int cantidad, QList<Precio> precios, const QString& codigo = QString(),
                   const QString& categoria = QStringLiteral("Almacén"))
 {
@@ -196,8 +204,8 @@ private slots:
         QStringList nombres;
         for (const Columna& c : cols) nombres << c.nombre;
         QCOMPARE(nombres, (QStringList{"Código", "Nombre", "Precios", "Categoría", "Proveedor", "Cantidad", "Medida bolsa",
-                                       "Vencimiento", "Stock mín.", "Notas"}));
-        for (const Columna& c : cols) QVERIFY2(!c.propia(), qPrintable(c.nombre));
+                                       "Vencimiento", "Stock mín.", "Notas", "Ganancia %"}));
+        for (const Columna& c : cols) QVERIFY2(!c.propia() || c.uuid == UUID_COLUMNA_GANANCIA, qPrintable(c.nombre));
         QVERIFY(!cols.last().visible);                                               // las notas se ven como ayuda sobre el nombre
         QVERIFY(cols[1].esencial() && cols[2].esencial() && cols[5].esencial());     // nombre, precios y cantidad
         QVERIFY(!cols[0].esencial());
@@ -275,14 +283,15 @@ private slots:
         for (const Columna& c : s.columnas()) ids << c.id;
         std::reverse(ids.begin(), ids.end());
         QVERIFY(s.ordenarColumnas(ids).ok);
-        QCOMPARE(s.columnas().first().clave, QString("notas"));
+        QCOMPARE(s.columnas().first().uuid, QString(UUID_COLUMNA_GANANCIA));
         QCOMPARE(s.columnas().last().clave, QString("codigo"));
         for (int i = 0; i < s.columnas().size(); ++i) QCOMPARE(s.columnas()[i].orden, i);
         // las que no se nombran quedan al final, en el orden que tenían
         QVERIFY(s.ordenarColumnas({s.columnaPorClave("cantidad")->id}).ok);
         QCOMPARE(s.columnas().first().clave, QString("cantidad"));
-        QCOMPARE(s.columnas()[1].clave, QString("notas"));
-        QCOMPARE(s.columnas().size(), 10);                                           // no se pierde ninguna
+        QCOMPARE(s.columnas()[1].uuid, QString(UUID_COLUMNA_GANANCIA));
+        QCOMPARE(s.columnas()[2].clave, QString("notas"));
+        QCOMPARE(s.columnas().size(), 11);                                           // no se pierde ninguna
     }
 
     void valoresDeColumnasPropias()
@@ -354,7 +363,7 @@ private slots:
             QCOMPARE(ops.size(), 2);
             QCOMPARE(ops.first().items.first().nombre, QString("Avena"));
             // las columnas de fábrica están y el programa funciona como siempre
-            QCOMPARE(s.columnas().size(), 10);
+            QCOMPARE(s.columnas().size(), 11);      // las 10 de fábrica y «Ganancia %»
             QVERIFY(s.registrarOperacion(TipoOperacion::Venta, {{avena.id, 3, "", 100}}).ok);
             QCOMPARE(s.obtener(avena.id)->cantidad, 5);
             QVERIFY(s.fijarCantidad(avena.id, 9).ok);
@@ -366,7 +375,7 @@ private slots:
             Stock otraVez(ruta);                                                      // abrir de nuevo no migra otra vez
             QVERIFY(otraVez.abierta());
             QCOMPARE(otraVez.listar().size(), 3);
-            QCOMPARE(otraVez.columnas().size(), 10);
+            QCOMPARE(otraVez.columnas().size(), 11);
         }
         QCOMPARE(QDir(dir.filePath("backups")).entryList({"antes_de_actualizar_*.db"}).size(), 1);
     }
@@ -634,6 +643,59 @@ private slots:
         QCOMPARE(vacio.cantidadVentas, 0);
         QCOMPARE(vacio.ventas, 0.0);
         QVERIFY(vacio.masVendidos.isEmpty());
+    }
+
+    void gananciaConPorcentajeDelProducto()
+    {
+        Stock s(":memory:");
+        const std::optional<Columna> col = columnaGanancia(s);
+        QVERIFY(col);
+        QVERIFY(col->propia());                                 // así la entienden las versiones anteriores
+        QCOMPARE(col->tipo, TipoColumna::Numero);
+        QVERIFY(!col->visible);
+
+        Producto yerba = producto("Yerba", 10, {{"1 kg", 1300}});
+        yerba.extra.insert(UUID_COLUMNA_GANANCIA, "30");        // costo 1000 + 30 % = 1300
+        const qint64 idYerba = s.crear(yerba).id;
+        Producto arroz = producto("Arroz", 10, {{"", 500}});
+        arroz.extra.insert(UUID_COLUMNA_GANANCIA, "25");        // tiene compras, pero manda el porcentaje
+        const qint64 idArroz = s.crear(arroz).id;
+        QVERIFY(s.registrarOperacion(TipoOperacion::Compra, {{idArroz, 5, QString(), 450}}).ok);
+        const qint64 idSal = s.crear(producto("Sal", 10, {{"", 300}})).id;   // sin porcentaje ni compras
+        QVERIFY(s.registrarOperacion(TipoOperacion::Venta, {{idYerba, 2, "1 kg", 1300}, {idArroz, 1, QString(), 500},
+                                                            {idSal, 1, QString(), 300}}).ok);
+
+        const QDate hoy = QDate::currentDate();
+        Reporte r = s.reporte(hoy, hoy);
+        QCOMPARE(r.ventasConCosto, 2600.0 + 500);
+        QCOMPARE(r.costoDeLoVendido, 2000.0 + 400);
+        QCOMPARE(r.ganancia, 600.0 + 100);
+        QCOMPARE(r.unidadesSinCosto, 1);                       // la sal
+
+        // Sin porcentaje, el arroz vuelve al costo de las compras (450)
+        arroz = *s.obtener(idArroz);
+        arroz.extra.remove(UUID_COLUMNA_GANANCIA);
+        QVERIFY(s.actualizar(arroz).ok);
+        r = s.reporte(hoy, hoy);
+        QCOMPARE(r.ganancia, 600.0 + 50);
+
+        // Si se elimina la columna, el porcentaje ya no cuenta
+        QVERIFY(s.eliminarColumna(col->id).ok);
+        r = s.reporte(hoy, hoy);
+        QCOMPARE(r.unidadesSinCosto, 3);
+    }
+
+    void columnaGananciaSeCreaUnaSolaVez()
+    {
+        QTemporaryDir dir;
+        const QString ruta = dir.filePath("ganancia.db");
+        {
+            Stock s(ruta);
+            QVERIFY(s.eliminarColumna(columnaGanancia(s)->id).ok);
+        }
+        Stock s(ruta);
+        QVERIFY(!columnaGanancia(s));                           // eliminada: no vuelve sola
+        QCOMPARE(s.columnas().size(), 10);
     }
 
     void alertasDeStockYVencimiento()

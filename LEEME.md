@@ -31,6 +31,14 @@ Poné tu `Logo.svg` en `data/` antes de construir (el `.desktop` usa `Icon=Logo`
 Además: la búsqueda ignora mayúsculas y tildes (`azucar` encuentra `AZÚCAR`), y cada venta/compra queda
 guardada en la base (tablas `operaciones` y `operacion_items`) con fecha y total.
 
+## Versión 2.4.0
+| Pedido | Cómo quedó |
+|---|---|
+| Calendario de vencimientos que empiece el domingo (2.3.1) | El vencimiento y las fechas Desde/Hasta de Reportes empiezan el domingo |
+| Poner el porcentaje de ganancia al editar el producto | Campo **Ganancia %** al editar (PC y celular): cuánto se le suma al costo (con 30, lo que cuesta $100 se vende a $130). Reportes calcula la ganancia de lo vendido con ese porcentaje; si el producto no lo tiene, usa el costo de las compras como antes |
+
+«Ganancia %» es una columna propia de números con uuid fijo `col-ganancia`: por eso la 2.3.x también la muestra y la sincroniza sin perderla. Arranca oculta en la tabla (se puede mostrar desde Columnas). Si se elimina, no vuelve sola.
+
 ## Versión 2.3.0
 | Pedido | Cómo quedó |
 |---|---|

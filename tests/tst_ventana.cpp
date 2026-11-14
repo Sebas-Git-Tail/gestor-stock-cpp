@@ -409,6 +409,15 @@ private slots:
         QCOMPARE(fecha->calendarWidget()->firstDayOfWeek(), Qt::Sunday);
     }
 
+    void alEditarApareceGananciaPorcentaje()
+    {
+        Producto p; p.nombre = "Yerba";
+        DialogoProducto d({}, {}, &p, nullptr, stock_->columnas());
+        auto* campo = d.findChild<QLineEdit*>(QStringLiteral("campoPropio_") + UUID_COLUMNA_GANANCIA);
+        QVERIFY(campo);                                          // aunque esté oculta en la tabla
+        QVERIFY(campo->placeholderText().contains("30"));
+    }
+
     void dialogoDeProductoNoAceptaPrecioInvalido()
     {
         Producto p; p.nombre = "Yerba";
@@ -516,7 +525,7 @@ private slots:
         QCOMPARE(titulosDe(*w).first(), QString("Medida bolsa"));
         QCOMPARE(titulosDe(*w).at(1), QString("Cantidad"));                          // las demás siguen en su orden
         QVERIFY(!stock_->columnaPorClave("proveedor")->visible);                      // la oculta sigue oculta…
-        QCOMPARE(stock_->columnas().size(), 10);                                       // …y no se perdió ninguna
+        QCOMPARE(stock_->columnas().size(), 11);                                       // …y no se perdió ninguna
     }
 
     void elOrdenYElAnchoSeRecuerdanPorColumnaAunqueCambienLasDemas()
@@ -671,14 +680,16 @@ private slots:
         DialogoColumnas d(*stock_);
         d.show();
         auto* lista = d.findChild<QListWidget*>("listaColumnas");
-        QCOMPARE(lista->count(), 10);
+        QCOMPARE(lista->count(), 11);                                                  // las 10 de fábrica y «Ganancia %»
         QVERIFY(lista->item(9)->text().startsWith("Notas"));
+        QVERIFY(lista->item(10)->text().startsWith("Ganancia %"));
+        QCOMPARE(lista->item(10)->checkState(), Qt::Unchecked);                       // oculta: se carga al editar
         QCOMPARE(lista->item(9)->checkState(), Qt::Unchecked);                        // las notas no se ven en la tabla
         QCOMPARE(lista->item(1)->checkState(), Qt::Checked);
 
         const Resultado r = d.agregar("Marca", TipoColumna::Texto);
         QVERIFY2(r.ok, qPrintable(r.error));
-        QCOMPARE(lista->count(), 11);
+        QCOMPARE(lista->count(), 12);
         QCOMPARE(d.seleccionada(), r.id);                                              // queda elegida la nueva
         QVERIFY(lista->currentItem()->text().contains("propia"));
         QVERIFY(!d.agregar("marca", TipoColumna::Texto).ok);                           // repetida
@@ -688,9 +699,9 @@ private slots:
         QVERIFY(lista->currentItem()->text().contains("número"));
         QVERIFY(d.mover(-1).ok);                                                       // sube un lugar
         QCOMPARE(d.seleccionada(), r.id);
-        QCOMPARE(lista->currentRow(), 9);
-        QVERIFY(d.mover(+1).ok);
         QCOMPARE(lista->currentRow(), 10);
+        QVERIFY(d.mover(+1).ok);
+        QCOMPARE(lista->currentRow(), 11);
         // el tilde es «se ve en la tabla»
         lista->item(4)->setCheckState(Qt::Unchecked);                                   // Proveedor
         QVERIFY(!stock_->columnaPorClave("proveedor")->visible);
@@ -708,17 +719,17 @@ private slots:
         QVERIFY(d.findChild<QPushButton*>("btnEliminar")->isEnabled());
         QVERIFY(d.findChild<QPushButton*>("btnTipo")->isEnabled());
         QVERIFY(d.eliminar().ok);
-        QCOMPARE(lista->count(), 10);
+        QCOMPARE(lista->count(), 11);
         // una del programa se quita y se puede volver a poner
         d.seleccionar(stock_->columnaPorClave("categoria")->id);
         QVERIFY(!d.findChild<QPushButton*>("btnTipo")->isEnabled());                    // las del programa no cambian de tipo
         QVERIFY(!d.findChild<QPushButton*>("btnRestaurar")->isEnabled());
         QVERIFY(d.eliminar().ok);
-        QCOMPARE(lista->count(), 9);
+        QCOMPARE(lista->count(), 10);
         QVERIFY(d.findChild<QPushButton*>("btnRestaurar")->isEnabled());
         QVERIFY(d.restaurar(stock_->columnasQuitadas().first().id).ok);
-        QCOMPARE(lista->count(), 10);
-        QCOMPARE(lista->item(9)->text().left(9), QString("Categoría"));                 // vuelve al final
+        QCOMPARE(lista->count(), 11);
+        QCOMPARE(lista->item(10)->text().left(9), QString("Categoría"));                // vuelve al final
     }
 
     void lasPreguntasDeColumnasFuncionanConSusVentanitas()

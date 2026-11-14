@@ -61,6 +61,11 @@ inline constexpr char CLAVE_VENCIMIENTO[] = "vencimiento";
 inline constexpr char CLAVE_STOCK_MIN[] = "stock_minimo";
 inline constexpr char CLAVE_NOTAS[] = "notas";
 
+// «Ganancia %» (2.4.0): es una columna propia (Número), así las versiones anteriores la muestran, la editan y
+// la sincronizan como cualquier otra. Se la reconoce por este uuid fijo, el mismo en todos los dispositivos.
+// Es el porcentaje que se le suma al costo: con 30, lo que cuesta $100 se vende a $130.
+inline constexpr char UUID_COLUMNA_GANANCIA[] = "col-ganancia";
+
 struct Columna {
     qint64 id = 0;
     QString uuid;              // el mismo en todos los dispositivos
@@ -145,7 +150,7 @@ struct Reporte {
     double compras = 0;              // importe comprado (solo lo que tiene costo cargado)
     int cantidadVentas = 0;          // cuántas ventas (operaciones)
     int unidadesVendidas = 0;
-    // Ganancia estimada: lo vendido menos lo que costó, con el costo promedio de las compras de cada
+    // Ganancia estimada: lo vendido menos lo que costó. El costo sale de la «Ganancia %» del producto o, si no tiene, del promedio de las compras de cada
     // producto. Lo vendido de productos sin costo cargado no entra (se avisa con unidadesSinCosto).
     double ventasConCosto = 0;
     double costoDeLoVendido = 0;

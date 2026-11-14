@@ -122,7 +122,7 @@ void DialogoReportes::actualizar()
         detalle = tr("Vendido %1 − costo %2").arg(formatearPrecio(r.ventasConCosto), formatearPrecio(r.costoDeLoVendido));
     if (r.unidadesSinCosto > 0)
         detalle += (detalle.isEmpty() ? QString() : QStringLiteral(". "))
-                   + tr("%n unidad(es) vendida(s) sin costo cargado no entran: cargá el costo en las compras.", nullptr, r.unidadesSinCosto);
+                   + tr("%n unidad(es) vendida(s) sin costo no entran: cargá la «Ganancia %» del producto (Editar) o el costo en las compras.", nullptr, r.unidadesSinCosto);
     ui->labelDetalleGanancia->setText(detalle);
 
     ui->tablaMasVendidos->setRowCount(int(r.masVendidos.size()));

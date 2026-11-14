@@ -91,7 +91,12 @@ void DialogoProducto::armarColumnas(const QList<Columna>& columnas, const Produc
         if (!c.propia()) continue;
         auto* campo = new QLineEdit(this);
         campo->setObjectName(QStringLiteral("campoPropio_") + c.uuid);
-        if (c.tipo == TipoColumna::Numero) campo->setPlaceholderText(tr("Ej.: 12,5"));
+        if (c.uuid == QLatin1String(UUID_COLUMNA_GANANCIA) && c.tipo == TipoColumna::Numero) {
+            campo->setPlaceholderText(tr("Ej.: 30 (lo que le gana sobre el costo)"));
+            campo->setToolTip(tr("Porcentaje que se le suma al costo: con 30, lo que cuesta $100 se vende a $130.\n"
+                                 "Con esto, Reportes calcula la ganancia de lo vendido."));
+        }
+        else if (c.tipo == TipoColumna::Numero) campo->setPlaceholderText(tr("Ej.: 12,5"));
         else if (c.tipo == TipoColumna::Fecha) campo->setPlaceholderText(tr("dd/mm/aaaa"));
         if (producto) campo->setText(textoValorColumna(c.tipo, producto->extra.value(c.uuid)));
         ui->formulario->insertRow(filaNotas++, c.nombre + QLatin1Char(':'), campo);

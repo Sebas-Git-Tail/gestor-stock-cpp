@@ -5,7 +5,7 @@
 # Si querés ícono, poné tu Logo.svg en data/ antes de construir.
 
 pkgname=gestor-stock
-pkgver=2.3.1
+pkgver=2.4.0
 pkgrel=1
 pkgdesc="Gestor de stock simple hecho con Qt6/C++ y SQLite"
 arch=('x86_64')

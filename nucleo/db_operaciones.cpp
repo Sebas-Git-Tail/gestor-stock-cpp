@@ -120,6 +120,22 @@ QHash<QString, double> costosPromedio(const QSqlDatabase& db)
     while (q.next()) costos.insert(q.value(0).toString(), q.value(1).toDouble());
     return costos;
 }
+
+// «Ganancia %» cargada en cada producto (uuid del producto -> porcentaje sobre el costo). Solo si la columna
+// sigue siendo de números y no se quitó; los valores negativos no cuentan.
+QHash<QString, double> porcentajesGanancia(const QSqlDatabase& db)
+{
+    QHash<QString, double> porcentajes;
+    QSqlQuery q = consulta(db,
+        "SELECT p.uuid, v.valor FROM valores_extra v JOIN columnas c ON c.id = v.columna_id JOIN productos p ON p.id = v.producto_id "
+        "WHERE c.uuid = ? AND c.borrado = 0 AND c.tipo = 'numero'", {QString::fromLatin1(UUID_COLUMNA_GANANCIA)});
+    while (q.next()) {
+        bool ok = false;
+        const double pct = q.value(1).toString().toDouble(&ok);
+        if (ok && pct >= 0) porcentajes.insert(q.value(0).toString(), pct);
+    }
+    return porcentajes;
+}
 }
 
 double Stock::costoPromedio(qint64 productoId) const
@@ -165,7 +181,9 @@ Reporte Stock::reporte(const QDate& desde, const QDate& hasta) const
         for (auto it = meses.cbegin(); it != meses.cend(); ++it) r.ventasPorMes.append({it.key(), aCentavos(it.value())});
 
         // Lo vendido, producto por producto: para lo más vendido y la ganancia
+        // El costo sale de la «Ganancia %» del producto si la tiene (precio = costo + %), si no del promedio de las compras
         const QHash<QString, double> costos = costosPromedio(db_);
+        const QHash<QString, double> porcentajes = porcentajesGanancia(db_);
         QSqlQuery items = consulta(db_,
             "SELECT i.producto_uuid, MAX(i.nombre), SUM(i.cantidad), SUM(i.cantidad * i.precio_unitario) FROM operacion_items i "
             "JOIN operaciones o ON o.id = i.operacion_id WHERE o.tipo = 'venta' "
@@ -177,7 +195,10 @@ Reporte Stock::reporte(const QDate& desde, const QDate& hasta) const
             const QString actual = valor(db_, "SELECT nombre FROM productos WHERE uuid = ? AND borrado = 0", {uuid}).toString();
             if (!actual.isEmpty()) pv.nombre = actual;
             r.unidadesVendidas += pv.cantidad;
-            if (costos.contains(uuid)) {
+            if (porcentajes.contains(uuid)) {
+                r.ventasConCosto += pv.importe;
+                r.costoDeLoVendido += pv.importe * 100.0 / (100.0 + porcentajes.value(uuid));
+            } else if (costos.contains(uuid)) {
                 r.ventasConCosto += pv.importe;
                 r.costoDeLoVendido += pv.cantidad * costos.value(uuid);
             } else {
