@@ -46,7 +46,13 @@ public:
     explicit DialogoApps(const QString &estaApp, QWidget *parent = nullptr);
 };
 
-// Busca (una vez por día) una versión nueva de la app y, si hay, pregunta si se instala.
+// Muestra «Apps y actualizaciones»: en la PC, DialogoApps; en Android, una capa encima de la ventana
+// con un botón «Volver» (abrir una ventana aparte con Widgets en Android cerraba la app: error fatal de
+// Qt al crear el contexto OpenGL de la ventana nueva).
+void mostrarApps(QWidget *ventana, const QString &estaApp);
+
+// Busca (una vez por día) una versión nueva de la app y, si hay, pregunta si se instala (en Android,
+// muestra la capa de mostrarApps con el botón «Actualizar», sin abrir diálogos).
 void avisarActualizaciones(QWidget *ventana, const QString &estaApp);
 
 } // namespace apps
