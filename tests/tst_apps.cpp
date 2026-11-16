@@ -3,6 +3,9 @@
 #include "CatalogoApps.h"
 #include "ModeloApps.h"
 #include "PanelApps.h"
+#include "Traducciones.h"
+
+#include <QDialogButtonBox>
 
 #include <QPushButton>
 
@@ -148,6 +151,15 @@ private slots:
         }
         QVERIFY(m.roleNames().values().contains("estado"));
         QVERIFY(m.versionNueva().isEmpty());
+    }
+
+    void botonesEstandarEnEspanol()
+    {
+        // Con la traducción cargada, un botón estándar no queda en inglés (en Android decía «Close»)
+        apps::cargarTraduccionesQt();
+        QDialogButtonBox caja(QDialogButtonBox::Close | QDialogButtonBox::Yes);
+        QCOMPARE(caja.button(QDialogButtonBox::Close)->text().remove(u'&'), QStringLiteral("Cerrar"));
+        QCOMPARE(caja.button(QDialogButtonBox::Yes)->text().remove(u'&'), QStringLiteral("Sí"));
     }
 
     void panelSinMostrarNoBusca()

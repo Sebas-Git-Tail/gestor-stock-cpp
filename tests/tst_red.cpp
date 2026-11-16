@@ -1,6 +1,12 @@
 // Pruebas de red/: servidor.json y comparación de versiones (sin conectarse a nada)
 #include "Actualizaciones.h"
 #include "ConfigServidor.h"
+#include "ClienteHttp.h"
+
+#include <QFile>
+#include <QTcpServer>
+#include <QTcpSocket>
+#include <QTemporaryDir>
 
 #include <QStandardPaths>
 #include <QTest>
@@ -60,6 +66,47 @@ private slots:
         QVERIFY(Actualizaciones::compararVersiones(QStringLiteral("v1.2.0"), QStringLiteral("1.2")) == 0);
         QVERIFY(Actualizaciones::compararVersiones(QStringLiteral("1.2.0"), QStringLiteral("1.2.1")) < 0);
         QVERIFY(Actualizaciones::compararVersiones(QStringLiteral("2.0"), QStringLiteral("1.99.99")) > 0);
+    }
+
+    // descargar() tiene que dejar el archivo byte por byte (antes, en Android, un APK llegaba roto
+    // porque el cuerpo pasaba por texto UTF-8)
+    void descargarBinario()
+    {
+        QByteArray datos;
+        for (int vuelta = 0; vuelta < 300; ++vuelta)
+            for (int b = 0; b < 256; ++b)
+                datos.append(char(b));
+        QTcpServer servidor;
+        QVERIFY(servidor.listen(QHostAddress::LocalHost));
+        connect(&servidor, &QTcpServer::newConnection, this, [&] {
+            QTcpSocket *s = servidor.nextPendingConnection();
+            connect(s, &QTcpSocket::readyRead, s, [s, datos] {
+                const QByteArray pedido = s->readAll();
+                if (pedido.startsWith("GET /falta")) {
+                    s->write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                } else {
+                    s->write("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: "
+                             + QByteArray::number(datos.size()) + "\r\nConnection: close\r\n\r\n");
+                    s->write(datos);
+                }
+                s->disconnectFromHost();
+            });
+        });
+        QTemporaryDir dir;
+        const QString ruta = dir.filePath(QStringLiteral("app.apk"));
+        const QUrl base(QStringLiteral("http://127.0.0.1:%1/").arg(servidor.serverPort()));
+        int codigo = -1;
+        http::descargar(this, base.resolved(QUrl(QStringLiteral("app.apk"))), ruta, [&](int c) { codigo = c; });
+        QTRY_COMPARE(codigo, 200);
+        QFile f(ruta);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QCOMPARE(f.readAll(), datos);
+
+        codigo = -1;
+        const QString otra = dir.filePath(QStringLiteral("no.apk"));
+        http::descargar(this, base.resolved(QUrl(QStringLiteral("falta"))), otra, [&](int c) { codigo = c; });
+        QTRY_COMPARE(codigo, 404);
+        QVERIFY(!QFile::exists(otra));          // sin archivo a medias
     }
 };
 

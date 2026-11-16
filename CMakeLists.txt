@@ -75,8 +75,9 @@ if(COMUN_APPS)
     add_library(comun_apps STATIC
         apps/CatalogoApps.cpp apps/CatalogoApps.h
         apps/Actualizador.cpp apps/Actualizador.h
-        apps/ModeloApps.cpp apps/ModeloApps.h)
-    set_target_properties(comun_apps PROPERTIES AUTOMOC ON)
+        apps/ModeloApps.cpp apps/ModeloApps.h
+        apps/Traducciones.cpp apps/Traducciones.h apps/traducciones/traducciones.qrc)
+    set_target_properties(comun_apps PROPERTIES AUTOMOC ON AUTORCC ON)
     target_include_directories(comun_apps PUBLIC apps)
     target_link_libraries(comun_apps PUBLIC comun_red Qt6::Core Qt6::Network)
     if(WIN32)

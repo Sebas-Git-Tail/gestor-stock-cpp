@@ -1,0 +1,7 @@
+<RCC>
+    <!-- Traducción de Qt al español (botones estándar: Aceptar, Cancelar, Sí, No, Cerrar...). En Android y
+         Windows Qt no la trae; es la de Qt 6.10 (gcc_64/translations), licencia LGPL como el resto de Qt. -->
+    <qresource prefix="/comun">
+        <file>qtbase_es.qm</file>
+    </qresource>
+</RCC>
