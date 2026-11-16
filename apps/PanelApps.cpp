@@ -230,8 +230,7 @@ void avisarActualizaciones(QWidget *ventana, const QString &estaApp)
             mostrarApps(v, estaApp);
     });
     act->buscarUnaVezPorDia();
-    return;
-#endif
+#else
     const InfoApp *app = buscar(estaApp);
     if (!app)
         return;
@@ -269,6 +268,7 @@ void avisarActualizaciones(QWidget *ventana, const QString &estaApp)
         act->descargarEInstalar();
     });
     act->buscarUnaVezPorDia();
+#endif
 }
 
 } // namespace apps
