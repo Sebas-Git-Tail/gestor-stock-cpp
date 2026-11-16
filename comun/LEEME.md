@@ -42,8 +42,9 @@ carpeta `android/src` (los proyectos tienen un enlace a ese archivo).
 - Instalar: Linux `pkexec pacman -U`, Android el instalador del sistema, Windows el instalador de Inno
   Setup (la propia app, en silencio y se vuelve a abrir).
 - CMake: `set(COMUN_APPS_WIDGETS ON)` y `comun_apps_widgets` (o `COMUN_APPS` y `comun_apps` en QML).
-- Android: copiar o enlazar `apps/android/com/sebastian/comun/*.java` en `android/src/com/sebastian/comun`
-  y `apps/android/res/xml/rutas_archivos.xml` en `android/res/xml`, y en el manifiesto el permiso
+- Android: las clases Java (`Instalador`, `ProveedorArchivos`) están en `red/android/com/sebastian/comun`, al lado de
+  `ClienteHttp.java`, así que entran con el mismo enlace de `android/src/com/sebastian/comun`. Además hay que enlazar
+  `apps/android/res/xml/rutas_archivos.xml` en `android/res/xml` y declarar en el manifiesto  el permiso
   `REQUEST_INSTALL_PACKAGES`, el proveedor `com.sebastian.comun.ProveedorArchivos`
   (`android:authorities="${applicationId}.archivos"`) y `<queries>` con los paquetes de las otras apps.
 - Para publicar una versión alcanza con subir el archivo con el nombre de siempre al release de GitHub

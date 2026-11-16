@@ -82,8 +82,9 @@ if(COMUN_APPS)
     if(WIN32)
         target_link_libraries(comun_apps PRIVATE shell32)
     endif()
-    # En Android la app tiene que incluir apps/android (Instalador.java, ProveedorArchivos.java y
-    # res/xml/rutas_archivos.xml) y declarar el permiso, el proveedor y <queries>: ver Instalador.java.
+    # En Android: Instalador.java y ProveedorArchivos.java están en red/android (como ClienteHttp.java);
+    # la app enlaza apps/android/res/xml/rutas_archivos.xml y declara permiso, proveedor y <queries>
+    # (ver red/android/com/sebastian/comun/Instalador.java). Necesita androidx.core.
 endif()
 
 if(COMUN_APPS_WIDGETS)
