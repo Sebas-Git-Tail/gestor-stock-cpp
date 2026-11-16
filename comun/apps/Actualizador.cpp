@@ -53,6 +53,11 @@ QStringList raicesServidor()
 QVersionNumber versionInstalada(const InfoApp &app, bool esEstaApp)
 {
     QVersionNumber v;
+#if defined(Q_OS_ANDROID) || defined(Q_OS_WIN)
+    // La app que está corriendo sabe su versión (y así también anda la versión portable de Windows)
+    if (esEstaApp)
+        return versionDeTexto(QCoreApplication::applicationVersion());
+#endif
 #if defined(Q_OS_ANDROID)
     if (!app.paqueteAndroid.isEmpty())
         v = versionDeTexto(QJniObject::callStaticObjectMethod(CLASE_JAVA, "version",
@@ -80,8 +85,6 @@ QVersionNumber versionInstalada(const InfoApp &app, bool esEstaApp)
     // no hay nada que actualizar.
     return v;
 #endif
-    if (v.isNull() && esEstaApp)
-        v = versionDeTexto(QCoreApplication::applicationVersion());
     return v;
 }
 

@@ -20,7 +20,8 @@ namespace apps {
 
 // La versión instalada de una app del catálogo en este equipo (nula si no está instalada).
 // Linux: pacman -Q; Android: PackageManager; Windows: el registro que deja Inno Setup.
-// Si es la app que está corriendo y no se encuentra, en Android y Windows se usa la versión del programa.
+// Si es la app que está corriendo, en Android y Windows se usa la versión del programa
+// (QCoreApplication::applicationVersion); en Linux, la del paquete (incluye el pkgrel).
 QVersionNumber versionInstalada(const InfoApp &app, bool esEstaApp = false);
 
 // Raíces del servidor casero (https://bodrio.seb-dev.fyi y Tailscale), de servidor.json
