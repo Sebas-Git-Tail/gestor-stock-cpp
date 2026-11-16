@@ -21,6 +21,7 @@ makedepends=(
 )
 optdepends=(
     'qt6-translations: botones estándar (Aceptar, Cancelar, Sí, No...) en español'
+    'polkit: instalar las actualizaciones y las otras apps desde la ventana (pkexec)'
 )
 
 source=()
