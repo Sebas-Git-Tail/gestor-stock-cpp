@@ -3,6 +3,8 @@
 #include "util.h"
 #include "db.h"
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
+#include "ModeloApps.h"
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QStandardPaths>
@@ -88,6 +90,10 @@ private slots:
         }
         QStringList advertencias;
         QQmlApplicationEngine engine;
+        // «Apps y actualizaciones» como en main.cpp, pero sin salir a internet
+        qputenv("COMUN_APPS_SIN_RED", "1");
+        apps::ModeloApps modeloApps(QStringLiteral("gestor-stock"));
+        engine.rootContext()->setContextProperty(QStringLiteral("Apps"), &modeloApps);
         connect(&engine, &QQmlEngine::warnings, this, [&](const QList<QQmlError>& l) { for (const auto& e : l) advertencias << e.toString(); });
         engine.addImportPath("qrc:/");
         engine.load(QUrl("qrc:/GestorStock/qml/Main.qml"));
@@ -99,7 +105,7 @@ private slots:
         QVariantMap conMinimo = c.producto(0);
         conMinimo["nombre"] = "Harina"; conMinimo["cantidad"] = "1"; conMinimo["stockMinimo"] = "4";
         c.guardarProducto(conMinimo);
-        for (const char* accion : {"columnas", "venta", "compra", "sinc", "reportes", "avisos"}) {
+        for (const char* accion : {"columnas", "venta", "compra", "sinc", "reportes", "avisos", "apps"}) {
             QMetaObject::invokeMethod(ventana, "abrir", Q_ARG(QVariant, QVariant(accion)));
             QTest::qWait(200);
         }

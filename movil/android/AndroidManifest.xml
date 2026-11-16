@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+<!-- Copia de la plantilla de Qt 6.10 (android/templates/AndroidManifest.xml) con lo que necesita comun/apps:
+     permiso para instalar, <queries> y el proveedor de archivos. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="ar.gestorstock.app"
+    android:installLocation="auto"
+    android:versionCode="-- %%INSERT_VERSION_CODE%% --"
+    android:versionName="-- %%INSERT_VERSION_NAME%% --">
+    <!-- %%INSERT_PERMISSIONS -->
+    <!-- %%INSERT_FEATURES -->
+    <!-- Actualizarse e instalar las otras apps: abrir el instalador del sistema (comun: Instalador.java) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Para ver qué versión de las otras apps está instalada (Android 11+ las esconde si no) -->
+    <queries>
+        <package android:name="com.sebastian.androidmanager" />
+        <package android:name="ar.ingresosgastos.app" />
+    </queries>
+    <supports-screens
+        android:anyDensity="true"
+        android:largeScreens="true"
+        android:normalScreens="true"
+        android:smallScreens="true" />
+    <application
+        android:name="org.qtproject.qt.android.bindings.QtApplication"
+        android:hardwareAccelerated="true"
+        android:label="-- %%INSERT_APP_NAME%% --"
+        android:icon="-- %%INSERT_APP_ICON%% --"
+        android:requestLegacyExternalStorage="true"
+        android:allowBackup="true"
+        android:fullBackupOnly="false">
+        <activity
+            android:name="org.qtproject.qt.android.bindings.QtActivity"
+            android:configChanges="orientation|uiMode|screenLayout|screenSize|smallestScreenSize|layoutDirection|locale|fontScale|keyboard|keyboardHidden|navigation|mcc|mnc|density"
+            android:label="-- %%INSERT_APP_NAME%% --"
+            android:launchMode="singleTop"
+            android:screenOrientation="unspecified"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+          <meta-data
+                android:name="android.app.lib_name"
+                android:value="-- %%INSERT_APP_LIB_NAME%% --" />
+
+          <meta-data
+                android:name="android.app.arguments"
+                android:value="-- %%INSERT_APP_ARGUMENTS%% --" />
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.qtprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/qtprovider_paths"/>
+        </provider>
+
+        <!-- Comparte el APK descargado con el instalador (res/xml/rutas_archivos.xml, de comun).
+             Clase propia para no chocar con el FileProvider de Qt de arriba. -->
+        <provider
+            android:name="com.sebastian.comun.ProveedorArchivos"
+            android:authorities="${applicationId}.archivos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/rutas_archivos" />
+        </provider>
+    </application>
+</manifest>

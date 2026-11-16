@@ -109,6 +109,7 @@ ApplicationWindow {
                     { texto: "Registrar una compra", accion: "compra" },
                     { texto: "Reportes y avisos", accion: "reportes" },
                     { texto: "Sincronizar con la PC", accion: "sinc" },
+                    { texto: "Apps y actualizaciones", accion: "apps" },
                     { texto: "Acerca de", accion: "acerca" }
                 ]
                 ItemDelegate {
@@ -128,6 +129,7 @@ ApplicationWindow {
         else if (accion === "sinc") pila.push(paginaSinc)
         else if (accion === "reportes") pila.push(paginaReportes)
         else if (accion === "avisos") pila.push(paginaReportes, { verAvisos: true })
+        else if (accion === "apps") pila.push(paginaApps)
         else if (accion === "acerca") acerca.open()
     }
     function editar(id) { pila.push(editor, { idProducto: id }) }
@@ -204,6 +206,28 @@ ApplicationWindow {
     Component { id: paginaOperacion; PaginaOperacion {} }
     Component { id: paginaSinc; PaginaSincronizacion {} }
     Component { id: paginaReportes; PaginaReportes {} }
+    Component { id: paginaApps; PaginaApps {} }
+
+    // Versión nueva de la app (se busca una vez por día): pregunta y abre el instalador de Android
+    Timer { interval: 4000; running: true; onTriggered: Apps.buscarActualizacion(false) }
+    Connections {
+        target: Apps
+        function onVersionNuevaCambio() { if (Apps.versionNueva !== "" && pila.depth === 1) dialogoVersion.open() }
+    }
+    Dialog {
+        id: dialogoVersion
+        title: "Versión nueva"
+        anchors.centerIn: parent
+        width: Math.min(ventana.width - 48, 360)
+        modal: true
+        standardButtons: Dialog.Yes | Dialog.No
+        Label {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            text: "Hay una versión nueva del Gestor de Stock: la " + Apps.versionNueva + " (tenés la " + Apps.versionPropia + ").\n\n¿La instalo ahora?"
+        }
+        onAccepted: { Apps.actualizarEstaApp(); pila.push(paginaApps) }
+    }
 
     Dialog {
         id: acerca

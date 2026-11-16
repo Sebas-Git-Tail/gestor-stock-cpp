@@ -14,7 +14,7 @@ add_library(gsescritorio STATIC
     ventanaprincipal.h ventanaprincipal.cpp main.ui
 )
 target_include_directories(gsescritorio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(gsescritorio PUBLIC gsnucleo Qt6::Widgets ZLIB::ZLIB)
+target_link_libraries(gsescritorio PUBLIC gsnucleo Qt6::Widgets ZLIB::ZLIB comun_apps_widgets)
 target_compile_options(gsescritorio PRIVATE -Wall -Wextra)
 
 add_executable(gestor-stock main.cpp)

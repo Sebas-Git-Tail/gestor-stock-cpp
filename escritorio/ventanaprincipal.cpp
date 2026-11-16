@@ -7,6 +7,7 @@
 #include "dialogosincronizacion.h"
 #include "importarexcel.h"
 #include "portapapeles.h"
+#include "PanelApps.h"
 #include "sincronizacion.h"
 #include "util.h"
 
@@ -129,6 +130,8 @@ void VentanaPrincipal::armarMenu()
     menu->addAction(ui->actionExportar);
     menu->addAction(ui->actionBackup);
     menu->addSeparator();
+    // Actualizar esta app e instalar las otras (comun/apps)
+    menu->addAction(tr("Apps y actualizaciones…"), this, [this] { (new apps::DialogoApps(QStringLiteral("gestor-stock"), this))->show(); });
     menu->addAction(ui->actionAcerca);
     ui->btnMenu->setMenu(menu);
 }

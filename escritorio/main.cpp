@@ -1,3 +1,4 @@
+#include "PanelApps.h"
 #include "db.h"
 #include "ventanaprincipal.h"
 
@@ -37,5 +38,9 @@ int main(int argc, char* argv[])
         : std::make_unique<QSettings>(QStringLiteral("gestor-stock"), QStringLiteral("gestor-stock"));   // ~/.config/gestor-stock/gestor-stock.conf
     VentanaPrincipal ventana(&stock, ajustes.get());
     ventana.show();
+    // Una vez por día: si hay una versión nueva, pregunta y la instala (pkexec pacman -U). Acá y no en la
+    // ventana, para que las pruebas (que crean la ventana) no salgan a internet.
+    if (args.size() <= 1)
+        apps::avisarActualizaciones(&ventana, QStringLiteral("gestor-stock"));
     return app.exec();
 }

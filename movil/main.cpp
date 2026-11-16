@@ -1,9 +1,11 @@
 // Gestor de Stock para Android (Qt Quick). En la PC también se puede ejecutar, para probarlo.
 #include "controlador.h"
 #include "db.h"
+#include "ModeloApps.h"
 #include <QGuiApplication>
 #include <QLocale>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQuickStyle>
 #include <QStandardPaths>
 #include <QtQml/qqmlextensionplugin.h>
@@ -41,6 +43,9 @@ int main(int argc, char* argv[])
 
     Controlador controlador(stock);
     Controlador::setInstancia(&controlador);
+    // «Apps y actualizaciones» (comun/apps): versión nueva de esta app y las otras para instalar
+    auto *modeloApps = new apps::ModeloApps(QStringLiteral("gestor-stock"), &app);   // vive más que el motor de QML
+    engine.rootContext()->setContextProperty(QStringLiteral("Apps"), modeloApps);
     engine.load(QUrl(QStringLiteral("qrc:/GestorStock/qml/Main.qml")));
     if (engine.rootObjects().isEmpty()) return 1;
     return app.exec();

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(gestor-stock VERSION 2.4.0 LANGUAGES CXX)
+project(gestor-stock VERSION 2.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +23,11 @@ find_package(Qt6 REQUIRED COMPONENTS Core Sql Network)
 # Código compartido (repo comun-qt, traído con git subtree a comun/): la sincronización cifrada
 # PC ↔ celular, la misma que usa ingresos-gastos
 set(COMUN_SINC ON)
+# y comun/apps: actualizarse sola e instalar las otras apps (con Widgets en el escritorio, QML en el celular)
+set(COMUN_APPS ON)
+if(GS_ESCRITORIO)
+    set(COMUN_APPS_WIDGETS ON)
+endif()
 add_subdirectory(comun)
 
 # El núcleo lo comparten las dos versiones: base de datos, búsqueda, columnas y sincronización
