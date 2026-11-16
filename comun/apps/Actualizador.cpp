@@ -118,7 +118,8 @@ void Actualizador::buscar()
     if (ocupado_)
         return;
     const Sistema sistema = sistemaActual();
-    if (!app_.disponibleEn(sistema)) {
+    // COMUN_APPS_SIN_RED=1: las pruebas de las apps abren las pantallas sin salir a internet
+    if (!app_.disponibleEn(sistema) || qEnvironmentVariableIntValue("COMUN_APPS_SIN_RED") == 1) {
         emit noEncontrada();
         return;
     }
