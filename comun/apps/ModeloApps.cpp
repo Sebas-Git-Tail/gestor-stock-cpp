@@ -135,6 +135,7 @@ QVariant ModeloApps::data(const QModelIndex &indice, int rol) const
 
 void ModeloApps::refrescar()
 {
+    ponerMensaje(QString());          // «Abriendo el instalador…» ya no corresponde
     for (int i = 0; i < filas_.size(); ++i) {
         if (filas_[i].act->ocupado())
             continue;
