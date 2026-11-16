@@ -1,5 +1,6 @@
 // Gestor de Stock para Android (Qt Quick). En la PC también se puede ejecutar, para probarlo.
 #include "controlador.h"
+#include "Traducciones.h"
 #include "db.h"
 #include "ModeloApps.h"
 #include <QGuiApplication>
@@ -15,6 +16,7 @@ Q_IMPORT_QML_PLUGIN(GestorStockPlugin)
 int main(int argc, char* argv[])
 {
     QGuiApplication app(argc, argv);
+    apps::cargarTraduccionesQt();   // botones estándar en español (comun/apps; Android y Windows no traen la traducción)
     QGuiApplication::setOrganizationName(QStringLiteral("gestor-stock"));
     QGuiApplication::setApplicationName(QStringLiteral("gestor-stock-movil"));
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Gestor de Stock"));

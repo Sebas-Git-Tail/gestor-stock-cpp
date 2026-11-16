@@ -1,4 +1,5 @@
 #include "PanelApps.h"
+#include "Traducciones.h"
 #include "db.h"
 #include "ventanaprincipal.h"
 
@@ -14,6 +15,7 @@
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
+    apps::cargarTraduccionesQt();   // botones estándar en español (comun/apps; Android y Windows no traen la traducción)
     QApplication::setApplicationName(QStringLiteral("gestor-stock"));
     QApplication::setApplicationDisplayName(QStringLiteral("Gestor de Stock"));
     QApplication::setApplicationVersion(QStringLiteral(GS_VERSION));

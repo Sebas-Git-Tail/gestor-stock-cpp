@@ -99,8 +99,9 @@ Page {
                 onClicked: ventana.editar(modelData.id)
                 contentItem: ColumnLayout {
                     spacing: 2
-                    Label { text: modelData.nombre; font.bold: true; font.pixelSize: 16 }
-                    Label { text: modelData.detalle; color: modelData.grave ? "#e34948" : "#b07800" }
+                    // Layout.fillWidth + elide: los nombres largos terminan en «…» en vez de cortarse en el borde
+                    Label { text: modelData.nombre; font.bold: true; font.pixelSize: 16; Layout.fillWidth: true; elide: Text.ElideRight }
+                    Label { text: modelData.detalle; color: modelData.grave ? "#e34948" : "#b07800"; Layout.fillWidth: true; elide: Text.ElideRight }
                 }
             }
             Label {
