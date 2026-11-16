@@ -8,6 +8,7 @@ Código que comparten mis programas en C++ / Qt 6, para no tener la misma copia 
 | `descargas/` | Diálogo de pistas de audio, subtítulos y calidad (`DialogoPistas`), lectura de `yt-dlp -J` y opciones para bajar en MKV (`ConsultaVideo`), resumen de una simulación de rsync (`ResumenSimulacion`) | Arch-Linux-Manager, Android-Manager, Windows-Manager |
 | `red/` | Pedidos HTTP(S) que andan igual en la PC y en Android (`ClienteHttp`), datos del servidor desde `servidor.json` (`ConfigServidor`), aviso de versión nueva desde GitHub (`Actualizaciones`) | Android-Manager, Windows-Manager, Bodrio Supremo |
 | `sinc/` | Sincronización PC ↔ celular **cifrada** (`ServidorSincBase`, `ClienteSincBase`) | gestor-stock-cpp, ingresos-gastos |
+| `apps/` | Catálogo de los programas, **actualizarse sola** e **instalar las otras apps** (`Actualizador`, `ModeloApps` para QML y Widgets, `PanelApps`/`DialogoApps`, `avisarActualizaciones`) | todos |
 | `terceros/monocypher/` | [Monocypher](https://monocypher.org) 4.0.2 (CC0 / BSD-2): X25519, Elligator, BLAKE2b y XChaCha20-Poly1305, sin OpenSSL | `sinc/` |
 
 ## Cómo se usa en un proyecto
@@ -32,6 +33,21 @@ Los cambios se hacen **acá** y después se trae la versión nueva a cada proyec
 
 Para Android, la app tiene que incluir `red/android/com/sebastian/comun/ClienteHttp.java` en su
 carpeta `android/src` (los proyectos tienen un enlace a ese archivo).
+
+## Apps: actualizarse e instalar las otras
+- `apps/CatalogoApps.cpp` dice de dónde se baja cada programa (release de GitHub o carpeta del servidor),
+  qué archivo corresponde a cada sistema y cómo se ve la versión instalada (pacman -Q, PackageManager o
+  el registro de Inno Setup). **Carina y Bodrio Supremo están ocultas**: se actualizan solas pero nunca
+  aparecen en la lista para instalar.
+- Instalar: Linux `pkexec pacman -U`, Android el instalador del sistema, Windows el instalador de Inno
+  Setup (la propia app, en silencio y se vuelve a abrir).
+- CMake: `set(COMUN_APPS_WIDGETS ON)` y `comun_apps_widgets` (o `COMUN_APPS` y `comun_apps` en QML).
+- Android: copiar o enlazar `apps/android/com/sebastian/comun/*.java` en `android/src/com/sebastian/comun`
+  y `apps/android/res/xml/rutas_archivos.xml` en `android/res/xml`, y en el manifiesto el permiso
+  `REQUEST_INSTALL_PACKAGES`, el proveedor `com.sebastian.comun.ProveedorArchivos`
+  (`android:authorities="${applicationId}.archivos"`) y `<queries>` con los paquetes de las otras apps.
+- Para publicar una versión alcanza con subir el archivo con el nombre de siempre al release de GitHub
+  (o dejarlo en la carpeta del servidor, para Bodrio y Carina).
 
 ## Sincronización (versión 2)
 - **Emparejar** con un código de 6 números: intercambio de claves CPace (X25519 + Elligator). El código
