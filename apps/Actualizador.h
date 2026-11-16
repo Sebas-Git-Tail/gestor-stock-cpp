@@ -38,7 +38,7 @@ public:
     const InfoApp &app() const { return app_; }
 
     // Busca la última versión: emite encontrada() (y además hayVersionNueva() si es más nueva que la
-    // instalada) o noEncontrada().
+    // instalada) o noEncontrada(). Con la variable COMUN_APPS_SIN_RED=1 no sale a la red (pruebas).
     void buscar();
     // Como buscar(), pero como mucho una vez por día (para el aviso al abrir la app)
     void buscarUnaVezPorDia();
