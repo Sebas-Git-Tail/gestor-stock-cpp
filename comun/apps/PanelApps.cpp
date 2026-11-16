@@ -2,6 +2,7 @@
 
 #include <QCoreApplication>
 #include <QDialogButtonBox>
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -163,8 +164,74 @@ DialogoApps::DialogoApps(const QString &estaApp, QWidget *parent) : QDialog(pare
     resize(560, 520);
 }
 
+namespace {
+
+// Capa con la lista de apps encima de toda la ventana (Android): es un hijo de la ventana, no una
+// ventana nueva. Sigue el tamaño de la ventana y se cierra con «Volver».
+class CapaApps : public QWidget
+{
+public:
+    CapaApps(QWidget *ventana, const QString &estaApp) : QWidget(ventana)
+    {
+        setObjectName(QStringLiteral("capaApps"));
+        setAttribute(Qt::WA_DeleteOnClose);
+        setAutoFillBackground(true);                      // tapa lo que hay abajo (usa la paleta de la app)
+        auto *capa = new QVBoxLayout(this);
+        auto *arriba = new QHBoxLayout;
+        auto *volver = new QPushButton(tr("← Volver"), this);
+        auto *titulo = new QLabel(tr("<b>Apps y actualizaciones</b>"), this);
+        arriba->addWidget(volver);
+        arriba->addWidget(titulo, 1);
+        capa->addLayout(arriba);
+        capa->addWidget(new PanelApps(estaApp, this), 1);
+        connect(volver, &QPushButton::clicked, this, &QWidget::close);
+        ventana->installEventFilter(this);
+        setGeometry(ventana->rect());
+        raise();
+        show();
+    }
+
+protected:
+    bool eventFilter(QObject *objeto, QEvent *e) override
+    {
+        if (objeto == parentWidget() && e->type() == QEvent::Resize)
+            setGeometry(parentWidget()->rect());
+        return false;
+    }
+};
+
+} // namespace
+
+void mostrarApps(QWidget *ventana, const QString &estaApp)
+{
+#ifdef Q_OS_ANDROID
+    if (auto *vieja = ventana->findChild<QWidget *>(QStringLiteral("capaApps"), Qt::FindDirectChildrenOnly)) {
+        vieja->raise();
+        return;
+    }
+    new CapaApps(ventana, estaApp);
+#else
+    (new DialogoApps(estaApp, ventana))->show();
+#endif
+}
+
 void avisarActualizaciones(QWidget *ventana, const QString &estaApp)
 {
+#ifdef Q_OS_ANDROID
+    // Sin diálogos (en Android una ventana nueva cerraba la app): si hay versión nueva se muestra la capa
+    // de apps, que arriba ofrece «Actualizar».
+    const InfoApp *info = buscar(estaApp);
+    if (!info)
+        return;
+    auto *act = new Actualizador(*info, true, ventana);
+    QPointer<QWidget> v(ventana);
+    QObject::connect(act, &Actualizador::hayVersionNueva, ventana, [v, estaApp] {
+        if (v)
+            mostrarApps(v, estaApp);
+    });
+    act->buscarUnaVezPorDia();
+    return;
+#endif
     const InfoApp *app = buscar(estaApp);
     if (!app)
         return;
