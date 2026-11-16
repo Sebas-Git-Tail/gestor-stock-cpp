@@ -155,7 +155,9 @@ DialogoApps::DialogoApps(const QString &estaApp, QWidget *parent) : QDialog(pare
     setAttribute(Qt::WA_DeleteOnClose);
     auto *capa = new QVBoxLayout(this);
     capa->addWidget(new PanelApps(estaApp, this), 1);
-    auto *botones = new QDialogButtonBox(QDialogButtonBox::Close, this);
+    // Botón propio: con QDialogButtonBox::Close dice «Close» donde Qt no tiene traducciones (Windows, Android)
+    auto *botones = new QDialogButtonBox(this);
+    botones->addButton(tr("Cerrar"), QDialogButtonBox::RejectRole);
     connect(botones, &QDialogButtonBox::rejected, this, &QDialog::reject);
     capa->addWidget(botones);
     resize(560, 520);
