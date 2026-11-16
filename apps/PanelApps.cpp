@@ -3,6 +3,8 @@
 #include <QCoreApplication>
 #include <QDialogButtonBox>
 #include <QEvent>
+#include <QGuiApplication>
+#include <QWindow>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -28,6 +30,11 @@ PanelApps::PanelApps(const QString &estaApp, QWidget *parent)
     connect(modelo_, &ModeloApps::mensajeCambio, this, [this] { mensaje_->setText(modelo_->mensaje()); });
     connect(modelo_, &ModeloApps::versionNuevaCambio, this, &PanelApps::actualizarPropia);
     connect(modelo_, &ModeloApps::actualizandoCambio, this, &PanelApps::actualizarPropia);
+    // Al volver a la app (por ejemplo, del instalador de Android) la lista se pone al día
+    connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState estado) {
+        if (estado == Qt::ApplicationActive && buscado_ && isVisible())
+            modelo_->refrescar();
+    });
 }
 
 void PanelApps::armar()
@@ -185,6 +192,11 @@ public:
         capa->addLayout(arriba);
         capa->addWidget(new PanelApps(estaApp, this), 1);
         connect(volver, &QPushButton::clicked, this, &QWidget::close);
+        // La ventana se dibuja detrás de la barra de estado: se respetan sus márgenes seguros
+        if (QWindow *w = ventana->window()->windowHandle()) {
+            setContentsMargins(w->safeAreaMargins());
+            connect(w, &QWindow::safeAreaMarginsChanged, this, [this](const QMargins &m) { setContentsMargins(m); });
+        }
         ventana->installEventFilter(this);
         setGeometry(ventana->rect());
         raise();
