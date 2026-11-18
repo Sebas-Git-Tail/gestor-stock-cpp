@@ -338,6 +338,14 @@ void aplicarPaletaYHoja(QApplication &app)
     app.setStyleSheet(hoja);
 }
 
+Estado estadoDeNombre(const QString &nombre)
+{
+    for (const Estado e : {Estado::Acento, Estado::Ok, Estado::Aviso, Estado::Error})
+        if (nombreEstado(e) == nombre)
+            return e;
+    return Estado::Neutro;
+}
+
 } // namespace
 
 const Colores &colores()
@@ -366,8 +374,15 @@ void ponerModo(bool oscuro)
         return;
     modo().oscuro = oscuro;
     QSettings().setValue(QStringLiteral("tema/oscuro"), oscuro);
-    if (auto *app = qobject_cast<QApplication *>(QCoreApplication::instance()); app && modo().aplicado)
+    if (auto *app = qobject_cast<QApplication *>(QCoreApplication::instance()); app && modo().aplicado) {
         aplicarPaletaYHoja(*app);
+        // Los chips tienen su propia hoja de estilo con los colores de antes
+        for (QWidget *w : QApplication::allWidgets()) {
+            auto *etiqueta = qobject_cast<QLabel *>(w);
+            if (etiqueta && etiqueta->property("chip").isValid())
+                marcarChip(etiqueta, estadoDeNombre(etiqueta->property("chip").toString()));
+        }
+    }
     emit avisos()->modoCambiado(oscuro);
 }
 

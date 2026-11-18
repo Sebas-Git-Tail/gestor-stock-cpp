@@ -28,13 +28,13 @@
 #include <QPixmap>
 #include <QObject>
 #include <QString>
+#include <QToolButton>     // botonModo() devuelve uno: así la app no tiene que incluirlo
 
 #include <functional>
 
 class QApplication;
 class QLabel;
 class QPushButton;
-class QToolButton;
 class QWidget;
 
 namespace tema {
