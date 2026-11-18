@@ -9,6 +9,7 @@ Código que comparten mis programas en C++ / Qt 6, para no tener la misma copia 
 | `red/` | Pedidos HTTP(S) que andan igual en la PC y en Android (`ClienteHttp`), datos del servidor desde `servidor.json` (`ConfigServidor`), aviso de versión nueva desde GitHub (`Actualizaciones`) | Android-Manager, Windows-Manager, Bodrio Supremo |
 | `sinc/` | Sincronización PC ↔ celular **cifrada** (`ServidorSincBase`, `ClienteSincBase`) | gestor-stock-cpp, ingresos-gastos |
 | `apps/` | Catálogo de los programas, **actualizarse sola** e **instalar las otras apps** (`Actualizador`, `ModeloApps` para QML y Widgets, `PanelApps`/`DialogoApps`, `avisarActualizaciones`) | todos |
+| `ui/` | **Tema e interfaz comunes.** Widgets (`COMUN_UI`, `comun_ui`): `tema::aplicar(app, acento)` (oscuro, con los colores del sitio), íconos SVG de trazo pintados del color que se pida (`tema::icono("buscar")`, en `ui/iconos/`), botones destacados/peligro, chips de estado, `TarjetaAccion`, `EstadoVacio` y avisos flotantes con «Deshacer» (`tema::avisar`). QML (`COMUN_UI_QML`, módulo `Comun.Ui`): `Tema`, `Icono`, `Seccion`, `Chip`, `Segmentos`, `Hoja`, `Dialogo`, `TarjetaHerramienta`, `TarjetaEstado`, `Avisos`, `EstadoVacio`, `AvisoFlotante` y la página `PaginaApps` | todos |
 | `terceros/monocypher/` | [Monocypher](https://monocypher.org) 4.0.2 (CC0 / BSD-2): X25519, Elligator, BLAKE2b y XChaCha20-Poly1305, sin OpenSSL | `sinc/` |
 
 ## Cómo se usa en un proyecto
@@ -33,6 +34,20 @@ Los cambios se hacen **acá** y después se trae la versión nueva a cada proyec
 
 Para Android, la app tiene que incluir `red/android/com/sebastian/comun/ClienteHttp.java` en su
 carpeta `android/src` (los proyectos tienen un enlace a ese archivo).
+
+## Interfaz común (ui/)
+- **Widgets:** `set(COMUN_UI ON)` (lo prende también `COMUN_APPS_WIDGETS`) y `comun_ui`. En `main`, antes de crear ventanas:
+  `tema::aplicar(app)` (celeste del sitio) o `tema::aplicar(app, QColor("#e8a838"))` (otro acento). Marcas por propiedad:
+  `tema::marcarPrimario(boton)`, `tema::marcarPeligro(boton)`, `tema::marcarChip(etiqueta, tema::Estado::Ok)`,
+  `tema::mostrarEstado(etiqueta, texto, estado)` (texto de color en vez de ✓/✗), `lista->setProperty("lateral", true)`.
+- **QML:** `set(COMUN_UI_QML ON)`, enlazar `comun_ui_qmlplugin`, en `main.cpp`
+  `#include <QtQml/qqmlextensionplugin.h>` + `Q_IMPORT_QML_PLUGIN(Comun_UiPlugin)` (también en las pruebas que carguen QML) y en
+  QML `import Comun.Ui`. El acento de cada app: `Tema.acento = "#2e7d32"`. `PaginaApps { conBarra: true }` para apps donde cada
+  página trae su barra. Las páginas del módulo se abren con un `Component`, no por nombre de archivo.
+- **Íconos:** SVG de 24×24 con trazo `#000000` (se reemplaza por el color pedido). Para agregar uno: el .svg en `ui/iconos/` y
+  una línea en `ui/iconos/iconos.qrc` (QML los toma solo, con un glob).
+- No usar emojis ni símbolos raros (☰ ⚠ 🔄) en la interfaz: en algunos celulares y en Windows salen como cuadraditos o con
+  un alto de línea enorme. Para eso están los íconos.
 
 ## Apps: actualizarse e instalar las otras
 - `apps/CatalogoApps.cpp` dice de dónde se baja cada programa (release de GitHub o carpeta del servidor),
