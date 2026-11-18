@@ -1,4 +1,5 @@
-// Ventana principal del celular: buscador y lista de productos. El botón «Opciones» abre lo demás.
+// Ventana principal del celular: buscador y lista de productos. Las 3 rayitas abren lo demás (con un
+// puntito si hay una versión nueva; «Apps y actualizaciones» se ve destacada en el menú).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
@@ -56,7 +57,7 @@ ApplicationWindow {
         RowLayout {
             anchors.fill: parent
             spacing: 4
-            ToolButton { text: "Opciones"; onClicked: menu.open(); Accessible.name: "Menú" }
+            BotonMenu { punto: Apps.versionNueva !== ""; onClicked: menu.open() }
             TextField {
                 id: campoBuscar
                 Layout.fillWidth: true
@@ -101,9 +102,9 @@ ApplicationWindow {
                     { texto: "Apps y actualizaciones", accion: "apps" },
                     { texto: "Acerca de", accion: "acerca" }
                 ]
-                ItemDelegate {
-                    Layout.fillWidth: true
+                ItemMenu {
                     text: modelData.texto
+                    destacado: modelData.accion === "apps" && Apps.versionNueva !== ""
                     onClicked: { menu.close(); ventana.abrir(modelData.accion) }
                 }
             }
@@ -200,11 +201,11 @@ ApplicationWindow {
     Component { id: paginaReportes; PaginaReportes {} }
     Component { id: paginaApps; PaginaApps { conBarra: true; nombreApp: "Gestor de Stock" } }
 
-    // Versión nueva de la app (se busca una vez por día): pregunta y abre el instalador de Android
+    // Versión nueva de la app (se busca cada vez que se abre: marca el menú; pregunta como mucho una vez por día)
     Timer { interval: 4000; running: true; onTriggered: Apps.buscarActualizacion(false) }
     Connections {
         target: Apps
-        function onVersionNuevaCambio() { if (Apps.versionNueva !== "" && pila.depth === 1) dialogoVersion.open() }
+        function onAvisoVersionNueva() { if (pila.depth === 1) dialogoVersion.open() }
     }
     Dialog {
         id: dialogoVersion
