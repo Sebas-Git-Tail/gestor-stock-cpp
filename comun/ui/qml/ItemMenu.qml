@@ -19,6 +19,7 @@ ItemDelegate {
 
     contentItem: RowLayout {
         spacing: 16
+        opacity: item.enabled ? 1 : 0.45
         Icono {
             visible: item.icono !== ""
             nombre: item.icono
