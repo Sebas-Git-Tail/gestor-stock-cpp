@@ -4,6 +4,8 @@
 //   QML:   ListView { model: modeloApps; delegate: ... model.nombre, model.estado, model.accion ...
 //                     onClicked: modeloApps.instalar(index) }
 //          modeloApps.versionNueva != "" → mostrar «Actualizar a ...» y llamar a modeloApps.actualizarEstaApp()
+//          (y marcar el menú: BotonMenu { punto: Apps.versionNueva !== "" }, ItemMenu { destacado: ... })
+//          onAvisoVersionNueva → preguntar «¿La instalo?» (como mucho una vez por día)
 //
 // Nunca lista las apps ocultas (Carina, Bodrio Supremo) ni la propia app.
 #pragma once
@@ -53,12 +55,14 @@ public:
 
     Q_INVOKABLE void refrescar();                  // vuelve a buscar las versiones de la lista
     Q_INVOKABLE void instalar(int fila);
-    // Busca una versión nueva de esta app: una vez por día, o siempre con forzar
+    // Busca una versión nueva de esta app. Sin forzar (al abrir la app) busca igual, pero avisoVersionNueva()
+    // sale como mucho una vez por día; versionNueva queda puesta para marcar el menú cada vez que se abre.
     Q_INVOKABLE void buscarActualizacion(bool forzar = false);
     Q_INVOKABLE void actualizarEstaApp();
 
 signals:
     void versionNuevaCambio();
+    void avisoVersionNueva(const QString &version);   // hay versión nueva y toca preguntar (una vez por día)
     void mensajeCambio();
     void actualizandoCambio();
     void cantidadCambio();
