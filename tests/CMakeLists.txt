@@ -10,5 +10,5 @@ prueba(tst_cripto comun_sinc comun_monocypher)
 target_include_directories(tst_cripto PRIVATE ../terceros/monocypher)
 prueba(tst_sinc comun_sinc)
 prueba(tst_red comun_red)
-prueba(tst_descargas comun_descargas)
+prueba(tst_descargas comun_descargas)   # el nucleo viene con comun_descargas
 prueba(tst_apps comun_apps_widgets)

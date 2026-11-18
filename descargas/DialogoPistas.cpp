@@ -1,6 +1,8 @@
 #include "DialogoPistas.h"
 #include "ui_DialogoPistas.h"
 
+#include "OpcionesPistas.h"
+
 #include <QComboBox>
 #include <QKeyEvent>
 #include <QTimer>
@@ -19,48 +21,10 @@ constexpr int RolSecundario = Qt::UserRole + 1;
 
 namespace {
 
-// Idioma de un código como «es-419» o «en-orig» (lo que va antes del primer guion)
-QLocale::Language idiomaDe(const QString &codigo)
+// Llena la lista con casillas, en el orden que dio OpcionesPistas
+void llenar(QListWidget *lista, const QList<OpcionesPistas::FilaIdioma> &filas)
 {
-    return QLocale::codeToLanguage(codigo.section(u'-', 0, 0));
-}
-
-// Nombre para mostrar de un código de idioma: «Spanish (Latin America)» para es-419.
-// Qt solo trae los nombres en inglés (los mismos que usa yt-dlp para los subtítulos).
-// Devuelve vacío si no conoce el código.
-QString nombreIdioma(const QString &codigo)
-{
-    const QLocale::Language idioma = idiomaDe(codigo);
-    if (idioma == QLocale::AnyLanguage)
-        return {};
-    QString nombre = QLocale::languageToString(idioma);
-    // Lo que sigue al idioma puede ser una escritura (zh-Hans) o un país o región (pt-BR)
-    const QStringList resto = codigo.split(u'-').mid(1);
-    for (const QString &parte : resto) {
-        if (const QLocale::Script escritura = QLocale::codeToScript(parte); escritura != QLocale::AnyScript)
-            nombre += QStringLiteral(" (%1)").arg(QLocale::scriptToString(escritura));
-        else if (const QLocale::Territory territorio = QLocale::codeToTerritory(parte); territorio != QLocale::AnyTerritory)
-            nombre += QStringLiteral(" (%1)").arg(QLocale::territoryToString(territorio));
-    }
-    return nombre;
-}
-
-// Fila con casilla para marcar. La lista se arma ya ordenada.
-struct Fila
-{
-    int grupo;          // para ordenar: primero los grupos más chicos
-    QString texto;
-    QString idioma;
-    QString ayuda;
-    bool secundario;
-};
-
-void llenar(QListWidget *lista, QList<Fila> filas)
-{
-    std::stable_sort(filas.begin(), filas.end(), [](const Fila &a, const Fila &b) {
-        return a.grupo != b.grupo ? a.grupo < b.grupo : QString::localeAwareCompare(a.texto, b.texto) < 0;
-    });
-    for (const Fila &fila : std::as_const(filas)) {
+    for (const OpcionesPistas::FilaIdioma &fila : filas) {
         auto *item = new QListWidgetItem(fila.texto, lista);
         item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
         item->setCheckState(Qt::Unchecked);
@@ -68,7 +32,6 @@ void llenar(QListWidget *lista, QList<Fila> filas)
         item->setData(RolSecundario, fila.secundario);
         item->setToolTip(fila.ayuda);
     }
-
     // Un clic en cualquier parte de la fila marca o desmarca, no solo en la casilla. Si el
     // clic fue en la casilla, Qt ya la cambió: por eso se compara con el estado que tenía
     // al apretar el botón (guardado en la propia lista).
@@ -105,33 +68,16 @@ DialogoPistas::DialogoPistas(const QList<PistaAudio> &audios, const QList<Subtit
 
     // ── Calidad y códecs: solo lo que ofrece el video, de mayor a menor calidad. Lo primero
     // de cada lista es «sin preferencia» (lo de siempre: lo mejor que haya) ──
-    QList<int> altos;
-    QStringList familiasVideo;
-    for (const FormatoVideo &formato : formatos) {
-        if (!altos.contains(formato.alto))
-            altos << formato.alto;
-        if (!familiasVideo.contains(formato.familia))
-            familiasVideo << formato.familia;
-    }
-    std::sort(altos.begin(), altos.end(), std::greater<int>());
-    ui->comboCalidad->addItem(tr("La mejor"), 0);
-    for (int alto : std::as_const(altos))
-        ui->comboCalidad->addItem(alto >= 2160 ? QStringLiteral("%1p (4K)").arg(alto) : QStringLiteral("%1p").arg(alto), alto);
-    // Orden de los códecs: de más eficiente a más compatible
-    static const QStringList ordenVideo{QStringLiteral("av1"), QStringLiteral("vp9"), QStringLiteral("h265"),
-                                        QStringLiteral("h264"), QStringLiteral("vp8")};
-    static const QStringList ordenAudio{QStringLiteral("opus"), QStringLiteral("aac"), QStringLiteral("eac3"),
-                                        QStringLiteral("ac3"), QStringLiteral("flac"), QStringLiteral("vorbis"), QStringLiteral("mp3")};
+    ui->comboCalidad->addItem(OpcionesPistas::textoCalidad(0), 0);
+    for (int alto : OpcionesPistas::calidades(formatos))
+        ui->comboCalidad->addItem(OpcionesPistas::textoCalidad(alto), alto);
     ui->comboVcodec->addItem(tr("Cualquiera"), QString());
-    for (const QString &familia : ordenVideo) {
-        if (familiasVideo.contains(familia))
-            ui->comboVcodec->addItem(nombreCodec(familia), familia);
-    }
+    for (const QString &familia : OpcionesPistas::familiasVideo(formatos))
+        ui->comboVcodec->addItem(nombreCodec(familia), familia);
     ui->comboAcodec->addItem(tr("Cualquiera"), QString());
-    for (const QString &familia : ordenAudio) {
-        if (codecsAudio.contains(familia))
-            ui->comboAcodec->addItem(nombreCodec(familia), familia);
-    }
+    for (const QString &familia : OpcionesPistas::familiasAudio(codecsAudio))
+        ui->comboAcodec->addItem(nombreCodec(familia), familia);
+
 #ifdef Q_OS_ANDROID
     // En Android la lista de un desplegable es una ventana aparte que no se abre bien sobre el
     // diálogo: cada desplegable se cambia por opciones para tocar, una al lado de la otra
@@ -168,25 +114,8 @@ DialogoPistas::DialogoPistas(const QList<PistaAudio> &audios, const QList<Subtit
         marcarCodecsDisponibles();
     }
 
-    // Idioma en que está el sistema: sus pistas y subtítulos van arriba en las listas
-    const QLocale::Language idiomaSistema = QLocale::system().language();
-    const auto delSistema = [idiomaSistema](const QString &codigo) {
-        return idiomaSistema != QLocale::C && idiomaDe(codigo) == idiomaSistema;
-    };
-
-    // ── Pistas de audio: primero la original, después las del idioma del sistema y después
-    // el resto por nombre. En ese orden quedan en el archivo (la primera marcada es la que
-    // suena por defecto) ──
-    QList<Fila> filasAudio;
-    for (const PistaAudio &audio : audios) {
-        const QString nombre = nombreIdioma(audio.idioma);
-        QString texto = nombre.isEmpty() ? audio.idioma : QStringLiteral("%1 [%2]").arg(nombre, audio.idioma);
-        if (audio.original)
-            texto += tr(" — original");
-        else if (audio.idioma.endsWith(QLatin1String("-desc")))
-            texto += tr(" — audiodescripción");
-        filasAudio << Fila{audio.original ? 0 : delSistema(audio.idioma) ? 1 : 2, texto, audio.idioma, {}, false};
-    }
+    // ── Pistas de audio y subtítulos, en el orden de OpcionesPistas ──
+    const QList<OpcionesPistas::FilaIdioma> filasAudio = OpcionesPistas::filasAudio(audios);
     if (filasAudio.size() > 1) {
         llenar(ui->listaAudios, filasAudio);
         // Marca todas o, si ya lo están, las desmarca
@@ -202,28 +131,9 @@ DialogoPistas::DialogoPistas(const QList<PistaAudio> &audios, const QList<Subtit
         ui->botonTodosAudios->hide();
     }
 
-    // ── Subtítulos: primero los que subió el autor; después los automáticos, empezando por
-    // los del idioma original y los traducidos al idioma del sistema. Las demás
-    // traducciones automáticas (YouTube ofrece más de cien) quedan ocultas hasta que se
-    // pidan con la casilla o se busquen con el filtro ──
-    QList<Fila> filasSubtitulos;
-    int secundarios = 0;
-    for (const Subtitulo &subtitulo : subtitulos) {
-        const QString nombre = subtitulo.nombre.isEmpty() ? nombreIdioma(subtitulo.idioma) : subtitulo.nombre;
-        QString texto = nombre.isEmpty() ? subtitulo.idioma : QStringLiteral("%1 [%2]").arg(nombre, subtitulo.idioma);
-        int grupo = 0;
-        if (subtitulo.automatico) {
-            texto += tr(" — automático");
-            if (subtitulo.idioma.endsWith(QLatin1String("-orig")))
-                grupo = 1;
-            else if (delSistema(subtitulo.idioma))
-                grupo = 2;
-            else
-                grupo = 3;
-        }
-        secundarios += grupo == 3;
-        filasSubtitulos << Fila{grupo, texto, subtitulo.idioma, subtitulo.nombre, grupo == 3};
-    }
+    const QList<OpcionesPistas::FilaIdioma> filasSubtitulos = OpcionesPistas::filasSubtitulos(subtitulos);
+    const auto secundarios = std::count_if(filasSubtitulos.cbegin(), filasSubtitulos.cend(),
+                                           [](const OpcionesPistas::FilaIdioma &f) { return f.secundario; });
     if (filasSubtitulos.isEmpty()) {
         ui->etiquetaSubtitulos->setText(tr("El video no ofrece subtítulos."));
         ui->editFiltro->hide();
@@ -287,21 +197,7 @@ Eleccion DialogoPistas::eleccion() const
 
 QString DialogoPistas::nombreCodec(const QString &familia)
 {
-    static const QHash<QString, QString> nombres{
-        {QStringLiteral("av1"), QStringLiteral("AV1")},
-        {QStringLiteral("vp9"), QStringLiteral("VP9")},
-        {QStringLiteral("h264"), QStringLiteral("H.264 (AVC)")},
-        {QStringLiteral("h265"), QStringLiteral("H.265 (HEVC)")},
-        {QStringLiteral("vp8"), QStringLiteral("VP8")},
-        {QStringLiteral("opus"), QStringLiteral("Opus")},
-        {QStringLiteral("aac"), QStringLiteral("AAC")},
-        {QStringLiteral("vorbis"), QStringLiteral("Vorbis")},
-        {QStringLiteral("mp3"), QStringLiteral("MP3")},
-        {QStringLiteral("ac3"), QStringLiteral("AC-3 (Dolby Digital)")},
-        {QStringLiteral("eac3"), QStringLiteral("E-AC-3 (Dolby Digital Plus)")},
-        {QStringLiteral("flac"), QStringLiteral("FLAC")},
-    };
-    return nombres.value(familia, familia);
+    return OpcionesPistas::nombreCodec(familia);
 }
 
 // Con una calidad elegida, los códecs de video que no existen en ella se marcan: si se
@@ -310,29 +206,15 @@ QString DialogoPistas::nombreCodec(const QString &familia)
 void DialogoPistas::marcarCodecsDisponibles()
 {
     const int alto = ui->comboCalidad->currentData().toInt();
-    QStringList enEseAlto;
-    for (const FormatoVideo &formato : std::as_const(formatos)) {
-        if (alto == 0 || formato.alto == alto)
-            enEseAlto << formato.familia;
-    }
-    for (int i = 1; i < ui->comboVcodec->count(); ++i) {
-        const QString familia = ui->comboVcodec->itemData(i).toString();
-        ui->comboVcodec->setItemText(i, enEseAlto.contains(familia) || alto == 0
-                                            ? nombreCodec(familia)
-                                            : tr("%1 — no está en %2p").arg(nombreCodec(familia)).arg(alto));
-    }
+    for (int i = 1; i < ui->comboVcodec->count(); ++i)
+        ui->comboVcodec->setItemText(i, OpcionesPistas::textoCodecVideo(ui->comboVcodec->itemData(i).toString(), alto, formatos));
 #ifdef Q_OS_ANDROID
     if (auto *opciones = findChild<QListWidget *>(QStringLiteral("comboVcodecOpciones"))) {
         for (int i = 0; i < opciones->count() && i < ui->comboVcodec->count(); ++i)
             opciones->item(i)->setText(ui->comboVcodec->itemText(i));
     }
 #endif
-    const QString vcodec = ui->comboVcodec->currentData().toString();
-    if (!vcodec.isEmpty() && alto != 0 && !enEseAlto.contains(vcodec))
-        ui->etiquetaCalidad->setText(tr("Se baja %1 en la mejor calidad que tenga por debajo de %2p.")
-                                         .arg(nombreCodec(vcodec)).arg(alto));
-    else
-        ui->etiquetaCalidad->setText(tr("El archivo queda en MKV. Si un video no tiene lo elegido, se baja lo más parecido."));
+    ui->etiquetaCalidad->setText(OpcionesPistas::explicacion(alto, ui->comboVcodec->currentData().toString(), formatos));
 }
 
 // Muestra las filas que coinciden con el filtro. Las traducciones automáticas a otros

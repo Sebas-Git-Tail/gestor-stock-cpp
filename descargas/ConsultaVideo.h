@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "DialogoPistas.h"
+#include "Pistas.h"
 
 #include <QByteArray>
 #include <QHash>

@@ -1,4 +1,6 @@
 #include "PanelApps.h"
+#include "Piezas.h"
+#include "Tema.h"
 
 #include <QCoreApplication>
 #include <QDialogButtonBox>
@@ -10,6 +12,7 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QPointer>
+#include <QProgressBar>
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QScrollArea>
@@ -37,21 +40,72 @@ PanelApps::PanelApps(const QString &estaApp, QWidget *parent)
     });
 }
 
+namespace {
+
+// Recuadro con borde redondeado (tema: propiedad «tarjeta»)
+QFrame *nuevaTarjeta(QWidget *padre)
+{
+    auto *caja = new QFrame(padre);
+    caja->setProperty("tarjeta", true);
+    return caja;
+}
+
+QLabel *nuevoIcono(const QString &nombre, QWidget *padre)
+{
+    auto *icono = new QLabel(padre);
+    icono->setFixedSize(40, 40);
+    icono->setAlignment(Qt::AlignCenter);
+    const QColor a = tema::colores().acento;
+    icono->setStyleSheet(QStringLiteral("background: rgba(%1, %2, %3, 0.16); border-radius: 8px;")
+                             .arg(a.red()).arg(a.green()).arg(a.blue()));
+    icono->setPixmap(tema::pixmap(nombre, 22, a, padre->devicePixelRatioF()));
+    return icono;
+}
+
+QProgressBar *nuevoProgreso(QWidget *padre)
+{
+    auto *barra = new QProgressBar(padre);
+    barra->setTextVisible(false);
+    barra->setMaximumHeight(8);
+    barra->setMinimumWidth(120);
+    barra->hide();
+    return barra;
+}
+
+} // namespace
+
 void PanelApps::armar()
 {
     auto *principal = new QVBoxLayout(this);
+    principal->setSpacing(10);
 
-    // Esta app: versión y botón para actualizar
-    auto *filaPropia = new QHBoxLayout;
-    propia_ = new QLabel(this);
+    // Esta app: versión, estado y botón para actualizar
+    auto *cajaPropia = nuevaTarjeta(this);
+    auto *filaPropia = new QHBoxLayout(cajaPropia);
+    filaPropia->setContentsMargins(14, 12, 14, 12);
+    filaPropia->setSpacing(12);
+    filaPropia->addWidget(nuevoIcono(QStringLiteral("actualizar"), cajaPropia), 0, Qt::AlignTop);
+    auto *textosPropia = new QVBoxLayout;
+    textosPropia->setSpacing(4);
+    propia_ = new QLabel(cajaPropia);
     propia_->setWordWrap(true);
-    botonPropia_ = new QPushButton(tr("Buscar actualizaciones"), this);
-    filaPropia->addWidget(propia_, 1);
-    filaPropia->addWidget(botonPropia_);
-    principal->addLayout(filaPropia);
+    chipPropia_ = new QLabel(cajaPropia);
+    progresoPropia_ = nuevoProgreso(cajaPropia);
+    textosPropia->addWidget(propia_);
+    auto *filaChip = new QHBoxLayout;
+    filaChip->addWidget(chipPropia_);
+    filaChip->addWidget(progresoPropia_, 1);
+    filaChip->addStretch();
+    textosPropia->addLayout(filaChip);
+    botonPropia_ = new QPushButton(tr("Buscar actualizaciones"), cajaPropia);
+    filaPropia->addLayout(textosPropia, 1);
+    filaPropia->addWidget(botonPropia_, 0, Qt::AlignVCenter);
+    principal->addWidget(cajaPropia);
     connect(botonPropia_, &QPushButton::clicked, this, [this] {
         if (modelo_->versionNueva().isEmpty()) {
-            propia_->setText(tr("Buscando una versión nueva…"));
+            chipPropia_->setVisible(true);
+            chipPropia_->setText(tr("Buscando una versión nueva…"));
+            tema::marcarChip(chipPropia_, tema::Estado::Neutro);
             modelo_->buscarActualizacion(true);
             // Si no hay nada nuevo, al rato vuelve el texto de siempre
             QTimer::singleShot(4000, this, &PanelApps::actualizarPropia);
@@ -61,51 +115,65 @@ void PanelApps::armar()
     });
     actualizarPropia();
 
-    auto *linea = new QFrame(this);
-    linea->setFrameShape(QFrame::HLine);
-    principal->addWidget(linea);
-
-    auto *titulo = new QLabel(tr("<b>Otras apps</b>"), this);
+    auto *titulo = new QLabel(tr("Otras apps"), this);
+    titulo->setProperty("secundario", true);
+    QFont negrita = titulo->font();
+    negrita.setBold(true);
+    titulo->setFont(negrita);
+    principal->addSpacing(4);
     principal->addWidget(titulo);
 
     auto *contenido = new QWidget;
     lista_ = new QVBoxLayout(contenido);
     lista_->setContentsMargins(0, 0, 0, 0);
+    lista_->setSpacing(8);
     for (int f = 0; f < modelo_->rowCount(); ++f) {
         const QModelIndex i = modelo_->index(f);
-        auto *caja = new QFrame(contenido);
-        caja->setFrameShape(QFrame::StyledPanel);
+        auto *caja = nuevaTarjeta(contenido);
         auto *fila = new QHBoxLayout(caja);
+        fila->setContentsMargins(14, 12, 14, 12);
+        fila->setSpacing(12);
+        fila->addWidget(nuevoIcono(QStringLiteral("paquete"), caja), 0, Qt::AlignTop);
         auto *textos = new QVBoxLayout;
+        textos->setSpacing(2);
         Fila w;
-        w.nombre = new QLabel(QStringLiteral("<b>%1</b><br>%2").arg(i.data(ModeloApps::Nombre).toString().toHtmlEscaped(),
-                                                                  i.data(ModeloApps::Descripcion).toString().toHtmlEscaped()), caja);
-        w.nombre->setWordWrap(true);
+        w.nombre = new QLabel(QStringLiteral("<b>%1</b>").arg(i.data(ModeloApps::Nombre).toString().toHtmlEscaped()), caja);
+        auto *descripcion = new QLabel(i.data(ModeloApps::Descripcion).toString(), caja);
+        descripcion->setWordWrap(true);
+        descripcion->setProperty("secundario", true);
         w.estado = new QLabel(caja);
         w.estado->setWordWrap(true);
-        w.estado->setEnabled(false);       // gris
+        w.estado->setProperty("secundario", true);
+        w.progreso = nuevoProgreso(caja);
         textos->addWidget(w.nombre);
+        textos->addWidget(descripcion);
+        textos->addSpacing(2);
         textos->addWidget(w.estado);
+        textos->addWidget(w.progreso);
         w.boton = new QPushButton(caja);
         fila->addLayout(textos, 1);
-        fila->addWidget(w.boton);
+        fila->addWidget(w.boton, 0, Qt::AlignVCenter);
         connect(w.boton, &QPushButton::clicked, this, [this, f] { modelo_->instalar(f); });
         lista_->addWidget(caja);
         filas_ << w;
         actualizarFila(f);
     }
     if (modelo_->rowCount() == 0)
-        lista_->addWidget(new QLabel(tr("No hay otras apps para este sistema."), contenido));
+        lista_->addWidget(new tema::EstadoVacio(QStringLiteral("paquete"), tr("No hay otras apps"),
+                                                tr("Para este sistema no hay otros programas para instalar."),
+                                                QString(), contenido));
     lista_->addStretch();
 
     auto *desplazable = new QScrollArea(this);
     desplazable->setWidgetResizable(true);
     desplazable->setFrameShape(QFrame::NoFrame);
     desplazable->setWidget(contenido);
+    desplazable->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; } QScrollArea > QWidget > QWidget { background: transparent; }"));
     principal->addWidget(desplazable, 1);
 
     mensaje_ = new QLabel(this);
     mensaje_->setWordWrap(true);
+    mensaje_->setProperty("secundario", true);
     mensaje_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     principal->addWidget(mensaje_);
 }
@@ -116,34 +184,52 @@ void PanelApps::actualizarFila(int fila)
         return;
     const QModelIndex i = modelo_->index(fila);
     const Fila &w = filas_.at(fila);
-    QString estado = i.data(ModeloApps::Estado).toString();
+    const bool ocupado = i.data(ModeloApps::Ocupado).toBool();
     const double progreso = i.data(ModeloApps::Progreso).toDouble();
-    if (i.data(ModeloApps::Ocupado).toBool() && progreso >= 0)
-        estado += QStringLiteral(" %1 %").arg(qRound(progreso * 100));
-    w.estado->setText(estado);
+    w.estado->setText(i.data(ModeloApps::Estado).toString());
+    w.progreso->setVisible(ocupado);
+    if (ocupado) {
+        w.progreso->setRange(0, progreso >= 0 ? 100 : 0);    // 0..0 = sin saber cuánto falta
+        if (progreso >= 0)
+            w.progreso->setValue(qRound(progreso * 100));
+    }
     const QString accion = i.data(ModeloApps::Accion).toString();
     w.boton->setText(accion.isEmpty() ? tr("Al día") : accion);
     w.boton->setEnabled(!accion.isEmpty());
-    w.boton->setVisible(!i.data(ModeloApps::Ocupado).toBool());
+    w.boton->setVisible(!ocupado);
+    tema::marcarPrimario(w.boton, !accion.isEmpty());
 }
 
 void PanelApps::actualizarPropia()
 {
     const QString nombre = QCoreApplication::applicationName();
+    propia_->setText(tr("<b>%1</b> %2").arg(nombre.toHtmlEscaped(), modelo_->versionPropia()));
     if (modelo_->actualizando()) {
         const double p = modelo_->progresoPropio();
-        propia_->setText(p >= 0 ? tr("Actualizando… %1 %").arg(qRound(p * 100)) : tr("Actualizando…"));
+        chipPropia_->setVisible(true);
+        chipPropia_->setText(tr("Actualizando…"));
+        tema::marcarChip(chipPropia_, tema::Estado::Acento);
+        progresoPropia_->show();
+        progresoPropia_->setRange(0, p >= 0 ? 100 : 0);
+        if (p >= 0)
+            progresoPropia_->setValue(qRound(p * 100));
         botonPropia_->setEnabled(false);
         return;
     }
+    progresoPropia_->hide();
     botonPropia_->setEnabled(true);
     if (modelo_->versionNueva().isEmpty()) {
-        propia_->setText(tr("<b>%1</b> %2").arg(nombre.toHtmlEscaped(), modelo_->versionPropia()));
+        chipPropia_->setText(tr("Al día"));
+        tema::marcarChip(chipPropia_, tema::Estado::Ok);
+        chipPropia_->setVisible(comprobado_);
         botonPropia_->setText(tr("Buscar actualizaciones"));
+        tema::marcarPrimario(botonPropia_, false);
     } else {
-        propia_->setText(tr("<b>%1</b> %2 · hay una versión nueva: <b>%3</b>")
-                             .arg(nombre.toHtmlEscaped(), modelo_->versionPropia(), modelo_->versionNueva()));
+        chipPropia_->setVisible(true);
+        chipPropia_->setText(tr("Versión nueva: %1").arg(modelo_->versionNueva()));
+        tema::marcarChip(chipPropia_, tema::Estado::Aviso);
         botonPropia_->setText(tr("Actualizar"));
+        tema::marcarPrimario(botonPropia_, true);
     }
 }
 
@@ -154,6 +240,7 @@ void PanelApps::showEvent(QShowEvent *e)
         buscado_ = true;
         modelo_->refrescar();
         modelo_->buscarActualizacion(true);
+        QTimer::singleShot(5000, this, [this] { comprobado_ = true; actualizarPropia(); });
     }
 }
 
@@ -185,7 +272,7 @@ public:
         setAutoFillBackground(true);                      // tapa lo que hay abajo (usa la paleta de la app)
         auto *capa = new QVBoxLayout(this);
         auto *arriba = new QHBoxLayout;
-        auto *volver = new QPushButton(tr("← Volver"), this);
+        auto *volver = new QPushButton(tema::icono(QStringLiteral("volver")), tr("Volver"), this);
         auto *titulo = new QLabel(tr("<b>Apps y actualizaciones</b>"), this);
         arriba->addWidget(volver);
         arriba->addWidget(titulo, 1);

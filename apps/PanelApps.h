@@ -10,6 +10,7 @@
 #include <QWidget>
 
 class QLabel;
+class QProgressBar;
 class QPushButton;
 class QVBoxLayout;
 
@@ -32,11 +33,13 @@ private:
 
     ModeloApps *modelo_;
     QVBoxLayout *lista_;
-    QLabel *mensaje_, *propia_;
+    QLabel *mensaje_, *propia_, *chipPropia_;
     QPushButton *botonPropia_;
-    struct Fila { QLabel *nombre, *estado; QPushButton *boton; };
+    QProgressBar *progresoPropia_;
+    struct Fila { QLabel *nombre, *estado; QPushButton *boton; QProgressBar *progreso; };
     QList<Fila> filas_;
     bool buscado_ = false;
+    bool comprobado_ = false;    // ya pasó un rato desde que se buscó: si no hay nada nuevo, «Al día»
 };
 
 class DialogoApps : public QDialog
