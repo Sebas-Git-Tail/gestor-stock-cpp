@@ -1,11 +1,30 @@
-// Colores y medidas comunes de las apps en QML (Android-Manager, Gestor de Stock, Ingresos y Gastos).
-// Sigue el tema del sistema (claro u oscuro), igual que Material.System. Cada app elige su acento
-// en main.qml:  Component.onCompleted: Tema.acento = "#2e7d32"   (o con un binding)
+// Colores y medidas comunes de las apps en QML (Android-Manager, Gestor de Stock, Ingresos y Gastos, Bodrio).
+// Modo claro u oscuro: hasta que se elige uno, el del sistema (o «oscuroPredeterminado», si la app lo pone);
+// Tema.alternar() lo cambia y queda guardado. La app usa  Material.theme: Tema.oscuro ? Material.Dark : Material.Light
+// y en el menú  ItemMenu { text: Tema.textoAlternar; icono: Tema.iconoAlternar; onClicked: Tema.alternar() }.
+// Cada app elige su acento en main.qml:  Component.onCompleted: Tema.acento = "#2e7d32"
 pragma Singleton
 import QtQuick
+import QtCore
 
 QtObject {
-    property bool oscuro: Application.styleHints.colorScheme === Qt.ColorScheme.Dark
+    id: tema
+    // null = seguir al sistema (o a oscuroPredeterminado)
+    property var oscuroPredeterminado: null
+    readonly property bool oscuroDelSistema: oscuroPredeterminado !== null ? oscuroPredeterminado
+                                            : Application.styleHints.colorScheme === Qt.ColorScheme.Dark
+    readonly property bool oscuro: ajustes.modo === "oscuro" ? true : ajustes.modo === "claro" ? false : oscuroDelSistema
+    function alternar() { ajustes.modo = oscuro ? "claro" : "oscuro" }
+    readonly property string textoAlternar: oscuro ? "Modo claro" : "Modo oscuro"
+    readonly property string iconoAlternar: oscuro ? "sol" : "luna"
+
+    // Archivo propio (no hace falta que la app tenga organizationName)
+    property Settings ajustes: Settings {
+        location: StandardPaths.writableLocation(StandardPaths.AppConfigLocation) + "/tema.ini"
+        category: "tema"
+        property string modo: ""     // "", "claro" u "oscuro"
+    }
+
     property color acento: "#2a78d6"
 
     readonly property color fondo: oscuro ? "#111110" : "#f3f3f1"

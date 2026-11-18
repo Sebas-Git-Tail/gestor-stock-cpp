@@ -3,13 +3,17 @@
 #include <QApplication>
 #include <QFile>
 #include <QHash>
+#include <QIconEngine>
 #include <QLabel>
 #include <QPainter>
 #include <QPalette>
+#include <QPointer>
 #include <QPushButton>
+#include <QSettings>
 #include <QStyle>
 #include <QStyleFactory>
 #include <QSvgRenderer>
+#include <QToolButton>
 
 #include <cmath>
 
@@ -20,9 +24,10 @@ namespace tema {
 
 namespace {
 
-Colores &coloresActuales()
+// Oscuro: los colores del sitio
+Colores paletaOscura()
 {
-    static Colores c{
+    return Colores{
         QColor(0x11, 0x14, 0x18),   // fondo
         QColor(0x17, 0x1a, 0x20),   // superficie
         QColor(0x1e, 0x22, 0x2a),   // superficie2
@@ -37,6 +42,44 @@ Colores &coloresActuales()
         QColor(0xe0, 0xa4, 0x3a),   // aviso
         QColor(0xef, 0x64, 0x61),   // error
     };
+}
+
+// Claro: grises fríos como el oscuro, texto casi negro y estados más oscuros para que se lean sobre blanco
+Colores paletaClara()
+{
+    return Colores{
+        QColor(0xf3, 0xf5, 0xf7),   // fondo
+        QColor(0xff, 0xff, 0xff),   // superficie
+        QColor(0xec, 0xef, 0xf2),   // superficie2
+        QColor(0xdc, 0xe0, 0xe5),   // borde
+        QColor(0xc4, 0xca, 0xd2),   // bordeFuerte
+        QColor(0x15, 0x19, 0x1e),   // texto
+        QColor(0x55, 0x5f, 0x6a),   // texto2
+        QColor(0x88, 0x90, 0x9a),   // texto3
+        QColor(0x00, 0xaa, 0xe4),   // acento
+        QColor(0x0b, 0x0d, 0x10),   // sobreAcento
+        QColor(0x1f, 0x8a, 0x54),   // ok
+        QColor(0xb0, 0x6d, 0x0f),   // aviso
+        QColor(0xd2, 0x3c, 0x3b),   // error
+    };
+}
+
+struct ModoTema
+{
+    bool oscuro = true;
+    bool aplicado = false;
+    QColor acento{0x00, 0xaa, 0xe4};
+    QList<std::function<QString(const Colores &)>> extras;
+};
+ModoTema &modo()
+{
+    static ModoTema e;
+    return e;
+}
+
+Colores &coloresActuales()
+{
+    static Colores c = paletaOscura();
     return c;
 }
 
@@ -185,22 +228,83 @@ QString nombreEstado(Estado estado)
     return QStringLiteral("neutro");
 }
 
-} // namespace
-
-const Colores &colores()
+// Ícono que se pinta al dibujarse: si su color es un «rol» del tema, toma el del modo actual
+class MotorIcono : public QIconEngine
 {
-    return coloresActuales();
-}
+public:
+    enum Rol { Fijo, Texto, Texto2, Texto3, Acento, SobreAcento, Ok, Aviso, Error };
 
-void aplicar(QApplication &app, const QColor &acento)
+    MotorIcono(const QString &nombre, const QColor &color) : nombre_(nombre), fijo_(color)
+    {
+        const Colores &c = coloresActuales();
+        if (!color.isValid()) rol_ = Texto;
+        else if (color == c.texto) rol_ = Texto;
+        else if (color == c.texto2) rol_ = Texto2;
+        else if (color == c.texto3) rol_ = Texto3;
+        else if (color == c.acento) rol_ = Acento;
+        else if (color == c.sobreAcento) rol_ = SobreAcento;
+        else if (color == c.ok) rol_ = Ok;
+        else if (color == c.aviso) rol_ = Aviso;
+        else if (color == c.error) rol_ = Error;
+    }
+
+    QColor colorActual(QIcon::Mode modo) const
+    {
+        const Colores &c = coloresActuales();
+        if (modo == QIcon::Disabled)
+            return c.texto3;
+        switch (rol_) {
+        case Texto: return c.texto;
+        case Texto2: return c.texto2;
+        case Texto3: return c.texto3;
+        case Acento: return c.acento;
+        case SobreAcento: return c.sobreAcento;
+        case Ok: return c.ok;
+        case Aviso: return c.aviso;
+        case Error: return c.error;
+        case Fijo: break;
+        }
+        return fijo_;
+    }
+
+    void paint(QPainter *pintor, const QRect &rect, QIcon::Mode modo, QIcon::State estado) override
+    {
+        const qreal escala = pintor->device() ? pintor->device()->devicePixelRatioF() : 1.0;
+        const QPixmap imagen = scaledPixmap(rect.size(), modo, estado, escala);
+        const int lado = qMin(rect.width(), rect.height());
+        pintor->drawPixmap(QRect(rect.x() + (rect.width() - lado) / 2, rect.y() + (rect.height() - lado) / 2, lado, lado), imagen);
+    }
+    QPixmap pixmap(const QSize &tamano, QIcon::Mode modo, QIcon::State estado) override
+    {
+        return scaledPixmap(tamano, modo, estado, 1.0);
+    }
+    QPixmap scaledPixmap(const QSize &tamano, QIcon::Mode modo, QIcon::State, qreal escala) override
+    {
+        const int lado = qMax(1, qMin(tamano.width(), tamano.height()));
+        return tema::pixmap(nombre_, lado, colorActual(modo), escala);
+    }
+    QSize actualSize(const QSize &tamano, QIcon::Mode, QIcon::State) override
+    {
+        const int lado = qMin(tamano.width(), tamano.height());
+        return QSize(lado, lado);
+    }
+    QIconEngine *clone() const override { return new MotorIcono(*this); }
+    QString key() const override { return QStringLiteral("comun-tema"); }
+    bool isNull() override { return nombre_.isEmpty(); }
+
+private:
+    QString nombre_;
+    QColor fijo_;
+    Rol rol_ = Fijo;
+};
+
+void aplicarPaletaYHoja(QApplication &app)
 {
-    asegurarRecursos();
     Colores &c = coloresActuales();
-    c.acento = acento;
+    c = modo().oscuro ? paletaOscura() : paletaClara();
+    c.acento = modo().acento;
     // 0,18: desde ahí el texto oscuro contrasta más que el blanco (WCAG)
-    c.sobreAcento = luminancia(acento) > 0.18 ? QColor(0x0b, 0x0d, 0x10) : QColor(Qt::white);
-
-    QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+    c.sobreAcento = luminancia(c.acento) > 0.18 ? QColor(0x0b, 0x0d, 0x10) : QColor(Qt::white);
 
     QPalette p;
     p.setColor(QPalette::Window, c.fondo);
@@ -221,14 +325,91 @@ void aplicar(QApplication &app, const QColor &acento)
     p.setColor(QPalette::Light, c.bordeFuerte);
     p.setColor(QPalette::Midlight, c.borde);
     p.setColor(QPalette::Mid, c.borde);
-    p.setColor(QPalette::Dark, c.fondo);
-    p.setColor(QPalette::Shadow, Qt::black);
+    p.setColor(QPalette::Dark, modo().oscuro ? c.fondo : c.bordeFuerte);
+    p.setColor(QPalette::Shadow, modo().oscuro ? QColor(Qt::black) : c.texto3);
     for (const auto rol : {QPalette::WindowText, QPalette::Text, QPalette::ButtonText})
         p.setColor(QPalette::Disabled, rol, c.texto3);
     p.setColor(QPalette::Disabled, QPalette::Highlight, c.borde);
     p.setColor(QPalette::Disabled, QPalette::Base, c.fondo);
     app.setPalette(p);
-    app.setStyleSheet(hojaDeEstilo(c));
+    QString hoja = hojaDeEstilo(c);
+    for (const auto &extra : std::as_const(modo().extras))
+        hoja += extra(c);
+    app.setStyleSheet(hoja);
+}
+
+} // namespace
+
+const Colores &colores()
+{
+    return coloresActuales();
+}
+
+void aplicar(QApplication &app, const QColor &acento)
+{
+    asegurarRecursos();
+    modo().acento = acento;
+    modo().oscuro = QSettings().value(QStringLiteral("tema/oscuro"), true).toBool();
+    modo().aplicado = true;
+    QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+    aplicarPaletaYHoja(app);
+}
+
+bool oscuro()
+{
+    return modo().oscuro;
+}
+
+void ponerModo(bool oscuro)
+{
+    if (modo().oscuro == oscuro)
+        return;
+    modo().oscuro = oscuro;
+    QSettings().setValue(QStringLiteral("tema/oscuro"), oscuro);
+    if (auto *app = qobject_cast<QApplication *>(QCoreApplication::instance()); app && modo().aplicado)
+        aplicarPaletaYHoja(*app);
+    emit avisos()->modoCambiado(oscuro);
+}
+
+void alternarModo()
+{
+    ponerModo(!modo().oscuro);
+}
+
+QToolButton *botonModo(QWidget *padre)
+{
+    auto *boton = new QToolButton(padre);
+    boton->setObjectName(QStringLiteral("botonModo"));
+    boton->setAutoRaise(true);
+    boton->setIconSize(QSize(20, 20));
+    boton->setCursor(Qt::PointingHandCursor);
+    const auto pintar = [boton] {
+        boton->setIcon(icono(modo().oscuro ? QStringLiteral("sol") : QStringLiteral("luna")));
+        boton->setToolTip(modo().oscuro ? QObject::tr("Pasar a modo claro") : QObject::tr("Pasar a modo oscuro"));
+        boton->setAccessibleName(boton->toolTip());
+    };
+    pintar();
+    QObject::connect(boton, &QToolButton::clicked, boton, [] { alternarModo(); });
+    alCambiarModo(boton, pintar);
+    return boton;
+}
+
+void agregarEstilo(std::function<QString(const Colores &)> estilo)
+{
+    modo().extras << std::move(estilo);
+    if (auto *app = qobject_cast<QApplication *>(QCoreApplication::instance()); app && modo().aplicado)
+        aplicarPaletaYHoja(*app);
+}
+
+AvisosTema *avisos()
+{
+    static AvisosTema *a = new AvisosTema;   // vive lo que la app
+    return a;
+}
+
+void alCambiarModo(QObject *contexto, std::function<void()> accion)
+{
+    QObject::connect(avisos(), &AvisosTema::modoCambiado, contexto, [accion = std::move(accion)] { accion(); });
 }
 
 QPixmap pixmap(const QString &nombre, int lado, const QColor &color, qreal escala)
@@ -263,14 +444,8 @@ QPixmap pixmap(const QString &nombre, int lado, const QColor &color, qreal escal
 
 QIcon icono(const QString &nombre, const QColor &color)
 {
-    QIcon resultado;
-    for (const int lado : {16, 20, 24, 32, 48}) {
-        for (const qreal escala : {1.0, 2.0}) {
-            resultado.addPixmap(pixmap(nombre, lado, color, escala), QIcon::Normal);
-            resultado.addPixmap(pixmap(nombre, lado, coloresActuales().texto3, escala), QIcon::Disabled);
-        }
-    }
-    return resultado;
+    asegurarRecursos();
+    return QIcon(new MotorIcono(nombre, color));
 }
 
 QColor color(Estado estado)

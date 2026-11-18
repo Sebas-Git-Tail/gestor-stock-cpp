@@ -40,12 +40,21 @@ carpeta `android/src` (los proyectos tienen un enlace a ese archivo).
   `tema::aplicar(app)` (celeste del sitio) o `tema::aplicar(app, QColor("#e8a838"))` (otro acento). Marcas por propiedad:
   `tema::marcarPrimario(boton)`, `tema::marcarPeligro(boton)`, `tema::marcarChip(etiqueta, tema::Estado::Ok)`,
   `tema::mostrarEstado(etiqueta, texto, estado)` (texto de color en vez de ✓/✗), `lista->setProperty("lateral", true)`.
+  **Modo claro/oscuro:** `tema::botonModo(this)` (botón de sol/luna) en la barra de la ventana; se recuerda en
+  `tema/oscuro` (la primera vez, oscuro). Estilo propio de la app con `tema::agregarEstilo([](const tema::Colores &c) {…})`
+  (no `app.setStyleSheet(app.styleSheet() + …)`, que se perdería al cambiar de modo) y lo pintado a mano con colores
+  (hojas de estilo de un widget, pixmaps) se rehace en `tema::alCambiarModo(this, [this] {…})`. Los íconos de
+  `tema::icono()` siguen solos al color del tema.
   Ventana principal: `tema::recordarVentana(&ventana)` antes de `show()` (vuelve a abrir con el mismo ancho y alto, y
   maximizada o en pantalla completa si lo estaba; se guarda en `ventana/geometria` de QSettings).
 - **QML:** `set(COMUN_UI_QML ON)`, enlazar `comun_ui_qmlplugin`, en `main.cpp`
   `#include <QtQml/qqmlextensionplugin.h>` + `Q_IMPORT_QML_PLUGIN(Comun_UiPlugin)` (también en las pruebas que carguen QML) y en
   QML `import Comun.Ui`. El acento de cada app: `Tema.acento = "#2e7d32"`. `PaginaApps { conBarra: true }` para apps donde cada
   página trae su barra. Las páginas del módulo se abren con un `Component`, no por nombre de archivo.
+- **Modo claro/oscuro (QML):** `Material.theme: Tema.oscuro ? Material.Dark : Material.Light` y en el menú
+  `ItemMenu { text: Tema.textoAlternar; icono: Tema.iconoAlternar; onClicked: Tema.alternar() }`. Se guarda en
+  `tema.ini` (AppConfigLocation). Hasta que se elige, sigue al sistema; una app oscura de entrada pone
+  `Tema.oscuroPredeterminado = true` (`Tema.oscuro` ya no se escribe).
 - **Menú de 3 rayitas (Android):** `BotonMenu { punto: Apps.versionNueva !== ""; onClicked: menu.open() }` en la barra
   (puntito naranja cuando hay versión nueva) y en el `Drawer` cada opción con `ItemMenu { text: …; icono: … }`; la de
   «Apps y actualizaciones» con `destacado: Apps.versionNueva !== ""` (naranja + «Nueva versión»). La pregunta «¿La

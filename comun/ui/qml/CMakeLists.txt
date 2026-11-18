@@ -2,7 +2,7 @@
 # En la app:  target_link_libraries(App PRIVATE comun_ui_qmlplugin)
 #             main.cpp:  #include <QtQml/qqmlextensionplugin.h>  y  Q_IMPORT_QML_PLUGIN(Comun_UiPlugin)
 #             QML:       import Comun.Ui
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 QmlCore)
 set(CMAKE_AUTOMOC ON)
 qt_policy(SET QTP0001 NEW)
 qt_policy(SET QTP0004 NEW)
@@ -18,7 +18,7 @@ qt_add_qml_module(comun_ui_qml
         TarjetaHerramienta.qml TarjetaEstado.qml Avisos.qml EstadoVacio.qml AvisoFlotante.qml
         PaginaApps.qml BotonMenu.qml ItemMenu.qml
 )
-target_link_libraries(comun_ui_qml PUBLIC Qt6::Quick Qt6::QuickControls2)
+target_link_libraries(comun_ui_qml PUBLIC Qt6::Quick Qt6::QuickControls2 Qt6::QmlCore)   # QmlCore: Settings del modo claro/oscuro
 
 # Los mismos íconos que usan las apps con Widgets (qrc:/comun/iconos/<nombre>.svg)
 file(GLOB COMUN_ICONOS_SVG RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ../iconos/*.svg)
