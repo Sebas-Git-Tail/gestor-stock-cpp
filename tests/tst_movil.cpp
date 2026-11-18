@@ -12,6 +12,7 @@
 #include <QtTest>
 
 Q_IMPORT_QML_PLUGIN(GestorStockPlugin)
+Q_IMPORT_QML_PLUGIN(Comun_UiPlugin)   // comun/ui/qml
 
 class TstMovil : public QObject
 {

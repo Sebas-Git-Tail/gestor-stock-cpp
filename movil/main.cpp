@@ -12,6 +12,7 @@
 #include <QtQml/qqmlextensionplugin.h>
 
 Q_IMPORT_QML_PLUGIN(GestorStockPlugin)
+Q_IMPORT_QML_PLUGIN(Comun_UiPlugin)   // comun/ui/qml
 
 int main(int argc, char* argv[])
 {

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(gestor-stock VERSION 2.5.1 LANGUAGES CXX)
+project(gestor-stock VERSION 2.6.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,6 +25,10 @@ find_package(Qt6 REQUIRED COMPONENTS Core Sql Network)
 set(COMUN_SINC ON)
 # y comun/apps: actualizarse sola e instalar las otras apps (con Widgets en el escritorio, QML en el celular)
 set(COMUN_APPS ON)
+# y comun/ui en QML (módulo Comun.Ui: avisos, estado vacío, página «Apps») para la versión del celular
+if(GS_MOVIL)
+    set(COMUN_UI_QML ON)
+endif()
 if(GS_ESCRITORIO)
     set(COMUN_APPS_WIDGETS ON)
 endif()

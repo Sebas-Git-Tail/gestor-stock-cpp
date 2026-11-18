@@ -8,6 +8,8 @@
 #include "importarexcel.h"
 #include "portapapeles.h"
 #include "PanelApps.h"
+#include "Piezas.h"
+#include "Tema.h"
 #include "sincronizacion.h"
 #include "util.h"
 
@@ -27,6 +29,10 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QScrollBar>
+#include <QShortcut>
+#include <QStackedWidget>
+#include <QStatusBar>
+#include <QToolButton>
 #include <QSettings>
 #include <QStandardItemModel>
 #include <QTextStream>
@@ -39,24 +45,32 @@ int anchoPorDefecto(const Columna& c)
 {
     const QString k = c.clave;
     if (k == QLatin1String(CLAVE_CODIGO)) return 60;
-    if (k == QLatin1String(CLAVE_NOMBRE)) return 420;
-    if (k == QLatin1String(CLAVE_PRECIOS)) return 210;
-    if (k == QLatin1String(CLAVE_CATEGORIA)) return 150;
-    if (k == QLatin1String(CLAVE_PROVEEDOR)) return 100;
+    if (k == QLatin1String(CLAVE_NOMBRE)) return 300;
+    if (k == QLatin1String(CLAVE_PRECIOS)) return 170;
+    if (k == QLatin1String(CLAVE_CATEGORIA)) return 120;
+    if (k == QLatin1String(CLAVE_PROVEEDOR)) return 110;
     if (k == QLatin1String(CLAVE_CANTIDAD)) return 80;
-    if (k == QLatin1String(CLAVE_MEDIDA)) return 110;
-    if (k == QLatin1String(CLAVE_VENCIMIENTO)) return 110;
+    if (k == QLatin1String(CLAVE_MEDIDA)) return 100;
+    if (k == QLatin1String(CLAVE_VENCIMIENTO)) return 100;
     if (k == QLatin1String(CLAVE_STOCK_MIN)) return 60;
-    if (k == QLatin1String(CLAVE_NOTAS)) return 250;
-    return 130;                                   // las propias
+    if (k == QLatin1String(CLAVE_NOTAS)) return 200;
+    return 120;                                   // las propias
 }
 
 constexpr int ROL_ID = Qt::UserRole + 1;      // el id del producto va en cada celda de la fila
 
-// (fondo, texto) para resaltar filas
-const QColor FONDO_VENCIDO(240, 128, 128), TEXTO_VENCIDO(60, 0, 0);
-const QColor FONDO_POR_VENCER(255, 241, 170), TEXTO_POR_VENCER(80, 60, 0);
-const QColor FONDO_STOCK_BAJO(255, 214, 214), TEXTO_STOCK_BAJO(120, 0, 0);
+// (fondo, texto) para resaltar filas: el color del aviso mezclado con el fondo de la tabla (tema oscuro)
+QColor mezclar(const QColor& a, const QColor& b, double t)
+{
+    return QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t, a.greenF() + (b.greenF() - a.greenF()) * t,
+                            a.blueF() + (b.blueF() - a.blueF()) * t);
+}
+struct ColoresFila { QColor fondo, texto; };
+ColoresFila colorFila(tema::Estado estado, double fuerza)
+{
+    const QColor base = tema::colores().superficie, c = tema::color(estado);
+    return {mezclar(base, c, fuerza), mezclar(c, QColor(Qt::white), 0.35)};
+}
 
 QString campoCsv(const QString& s)
 {
@@ -77,6 +91,7 @@ VentanaPrincipal::VentanaPrincipal(Stock* stock, QSettings* ajustes, QWidget* pa
                         ? Qt::DescendingOrder : Qt::AscendingOrder;
     armarTabla();
     armarMenu();
+    armarEstilo();
     conectar();
 
     restoreGeometry(ajustes_->value("ventana/geometria").toByteArray());
@@ -121,11 +136,8 @@ void VentanaPrincipal::armarMenu()
         ui->btnMenu->setIcon(icono);
         ui->btnMenu->setText(QString());
     }
+    // Reportes, sincronizar y columnas están a la vista (armarEstilo); en el menú queda lo menos usado
     auto* menu = new QMenu(this);
-    menu->addAction(ui->actionColumnas);
-    menu->addAction(ui->actionReportes);
-    menu->addAction(ui->actionSincronizar);
-    menu->addSeparator();
     menu->addAction(ui->actionImportar);
     menu->addAction(ui->actionExportar);
     menu->addAction(ui->actionBackup);
@@ -296,6 +308,7 @@ void VentanaPrincipal::restaurarPosicion()
 
 void VentanaPrincipal::closeEvent(QCloseEvent* evento)
 {
+    confirmarEliminados();
     guardarPosicion();
     evento->accept();
 }
@@ -329,7 +342,10 @@ void VentanaPrincipal::refrescar()
     const bool conMinimo = stock_->columnaActiva(CLAVE_STOCK_MIN);
     const int colNombre = columnaDe(CLAVE_NOMBRE), colVence = columnaDe(CLAVE_VENCIMIENTO);
     int bajos = 0, vencidos = 0, porVencer = 0;
+    int mostrados = 0;
     for (const Producto& p : productos) {
+        if (porEliminar_.contains(p.id)) continue;   // eliminado, esperando el «Deshacer»
+        ++mostrados;
         const auto dias = conVence ? diasParaVencer(p.vencimiento) : std::nullopt;
         const EstadoVencimiento estado = conVence ? estadoVencimiento(p.vencimiento) : EstadoVencimiento::Ninguno;
 
@@ -348,30 +364,45 @@ void VentanaPrincipal::refrescar()
         if (colNombre >= 0 && !p.notas.isEmpty()) fila[colNombre]->setToolTip(p.notas);
 
         const bool bajo = conMinimo && p.stockMinimo > 0 && p.cantidad <= p.stockMinimo;
-        const QColor *fondo = nullptr, *colorTexto = nullptr;
+        static const ColoresFila vencido = colorFila(tema::Estado::Error, 0.30);
+        static const ColoresFila porVencerColor = colorFila(tema::Estado::Aviso, 0.22);
+        static const ColoresFila stockBajo = colorFila(tema::Estado::Error, 0.14);
+        const ColoresFila* colores = nullptr;
         if (estado == EstadoVencimiento::Vencido) {
             ++vencidos;
-            fondo = &FONDO_VENCIDO; colorTexto = &TEXTO_VENCIDO;
+            colores = &vencido;
             if (colVence >= 0) fila[colVence]->setToolTip(*dias == 0 ? tr("Vence hoy") : tr("Vencido hace %1 días").arg(-*dias));
         } else if (estado == EstadoVencimiento::PorVencer) {
             ++porVencer;
-            fondo = &FONDO_POR_VENCER; colorTexto = &TEXTO_POR_VENCER;
+            colores = &porVencerColor;
             if (colVence >= 0) fila[colVence]->setToolTip(*dias == 0 ? tr("Vence hoy") : tr("Vence en %1 días").arg(*dias));
         } else if (bajo) {
-            fondo = &FONDO_STOCK_BAJO; colorTexto = &TEXTO_STOCK_BAJO;
+            colores = &stockBajo;
         }
         if (bajo) ++bajos;
-        if (fondo) {
-            for (auto* item : fila) { item->setBackground(*fondo); item->setForeground(*colorTexto); }
+        if (colores) {
+            for (auto* item : fila) { item->setBackground(colores->fondo); item->setForeground(colores->texto); }
         }
         modelo_->appendRow(fila);
     }
     auto* cabecera = ui->tablaProductos->horizontalHeader();
     modelo_->sort(cabecera->sortIndicatorSection(), cabecera->sortIndicatorOrder());
-    QStringList resumen{tr("%1 productos").arg(productos.size())};
-    if (conMinimo) resumen << tr("%1 con stock bajo").arg(bajos);
-    if (conVence) resumen << tr("%1 vencidos").arg(vencidos) << tr("%1 por vencer").arg(porVencer);
-    statusBar()->showMessage(resumen.join(QStringLiteral(" · ")));
+    mostrarResumen(mostrados, conMinimo, bajos, conVence, vencidos, porVencer);
+    // Sin nada para mostrar: el estado vacío (con un botón para empezar) en lugar de la tabla en blanco
+    if (mostrados == 0) {
+        if (buscandoAhora) {
+            vacio_->setTextos(tr("No hay productos que coincidan"),
+                              tr("Nada coincide con «%1». Probá con otra palabra, un código o un precio (ej.: 2000-5000).").arg(filtro));
+            vacio_->setTextoBoton(tr("Limpiar la búsqueda"));
+        } else {
+            vacio_->setTextos(tr("Todavía no hay productos"),
+                              tr("Agregá el primero o traé la lista desde un Excel: menú de arriba a la derecha, «Importar desde Excel»."));
+            vacio_->setTextoBoton(tr("Agregar el primer producto"));
+        }
+        pilaTabla_->setCurrentWidget(vacio_);
+    } else {
+        pilaTabla_->setCurrentWidget(ui->tablaProductos);
+    }
 
     // 3) volver a donde estaba
     if (terminoBusqueda) {
@@ -451,16 +482,165 @@ void VentanaPrincipal::eliminar()
         QMessageBox::information(this, tr("Elegí un producto"), tr("Seleccioná una fila de la tabla primero."));
         return;
     }
-    QString pregunta;
+    // Se esconden ya y se borran de verdad cuando se va el aviso (o al cerrar la ventana): hasta entonces,
+    // «Deshacer» los trae de vuelta tal cual estaban
+    confirmarEliminados();                        // lo de un borrado anterior, si quedaba
+    QString texto;
     if (ids.size() == 1) {
         const auto p = stock_->obtener(ids.first());
-        pregunta = tr("¿Eliminar «%1»? No se puede deshacer.").arg(p ? p->nombre : QString());
+        texto = tr("Se eliminó «%1».").arg(p ? p->nombre : QString());
     } else {
-        pregunta = tr("¿Eliminar los %1 productos seleccionados? No se puede deshacer.").arg(ids.size());
+        texto = tr("Se eliminaron %1 productos.").arg(ids.size());
     }
-    if (QMessageBox::question(this, tr("Eliminar"), pregunta) != QMessageBox::Yes) return;
+    for (qint64 id : ids) porEliminar_.insert(id);
+    refrescar();
+    tema::OpcionesAviso opciones;
+    opciones.milisegundos = 7000;
+    opciones.textoBoton = tr("Deshacer");
+    opciones.alBoton = [this, ids] {
+        for (qint64 id : ids) porEliminar_.remove(id);
+        refrescar();
+        seleccionar(ids, ids.first());
+    };
+    opciones.alVencer = [this] { confirmarEliminados(); };
+    tema::avisar(this, texto, opciones);
+}
+
+void VentanaPrincipal::confirmarEliminados()
+{
+    if (porEliminar_.isEmpty()) return;
+    const QSet<qint64> ids = std::exchange(porEliminar_, {});
     for (qint64 id : ids) stock_->eliminar(id);
     refrescar();
+}
+
+QString VentanaPrincipal::textoResumen() const
+{
+    QStringList partes{chipTotal_->text()};
+    for (const QPushButton* chip : {chipBajos_, chipVencidos_, chipPorVencer_})
+        if (!chip->isHidden()) partes << chip->text();
+    return partes.join(QStringLiteral(" · "));
+}
+
+void VentanaPrincipal::mostrarResumen(int total, bool conMinimo, int bajos, bool conVence, int vencidos, int porVencer)
+{
+    chipTotal_->setText(tr("%1 productos").arg(total));
+    chipBajos_->setText(tr("%1 con stock bajo").arg(bajos));
+    chipVencidos_->setText(tr("%1 vencidos").arg(vencidos));
+    chipPorVencer_->setText(tr("%1 por vencer").arg(porVencer));
+    chipBajos_->setVisible(conMinimo);
+    chipVencidos_->setVisible(conVence);
+    chipPorVencer_->setVisible(conVence);
+    // En color solo si hay alguno (si no, gris)
+    const auto pintar = [](QPushButton* chip, int cantidad, tema::Estado estado) {
+        const tema::Estado e = cantidad > 0 ? estado : tema::Estado::Neutro;
+        const QColor tinta = e == tema::Estado::Neutro ? tema::colores().texto2 : tema::color(e);
+        chip->setStyleSheet(QStringLiteral("QPushButton { background: rgba(%1, %2, %3, %4); color: %5; border: 1px solid rgba(%1, %2, %3, 0.35);"
+                                           " border-radius: 11px; padding: 2px 10px; min-height: 0; font-weight: 600; }"
+                                           "QPushButton:hover { border-color: %5; }")
+                                .arg(tinta.red()).arg(tinta.green()).arg(tinta.blue())
+                                .arg(e == tema::Estado::Neutro ? 0.08 : 0.16).arg(tinta.name()));
+        chip->setEnabled(cantidad > 0);
+    };
+    pintar(chipBajos_, bajos, tema::Estado::Error);
+    pintar(chipVencidos_, vencidos, tema::Estado::Error);
+    pintar(chipPorVencer_, porVencer, tema::Estado::Aviso);
+}
+
+void VentanaPrincipal::armarEstilo()
+{
+    // Buscador con lupa y botón para borrarlo
+    ui->inputBuscar->addAction(tema::icono(QStringLiteral("buscar"), tema::colores().texto3), QLineEdit::LeadingPosition);
+    ui->inputBuscar->setClearButtonEnabled(true);
+
+    // Lo que antes estaba escondido en el menú ☰: a la vista, con ícono
+    const auto botonBarra = [this](QAction* accion, const QString& icono) {
+        accion->setIcon(tema::icono(icono));
+        auto* boton = new QToolButton(this);
+        boton->setDefaultAction(accion);
+        boton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        boton->setText(accion->text().remove(QStringLiteral("…")).remove(QStringLiteral(" y avisos"))
+                           .remove(QStringLiteral(" con el celular")).remove(QStringLiteral(" de la tabla")));
+        boton->setToolTip(accion->text());
+        ui->layoutSuperior->insertWidget(ui->layoutSuperior->indexOf(ui->btnMenu), boton);
+        return boton;
+    };
+    botonBarra(ui->actionReportes, QStringLiteral("grafico"));
+    botonBarra(ui->actionSincronizar, QStringLiteral("sincronizar"));
+    botonBarra(ui->actionColumnas, QStringLiteral("columnas"));
+    ui->actionImportar->setIcon(tema::icono(QStringLiteral("subir")));
+    ui->actionExportar->setIcon(tema::icono(QStringLiteral("descargar")));
+    ui->actionBackup->setIcon(tema::icono(QStringLiteral("respaldo")));
+    ui->actionAcerca->setIcon(tema::icono(QStringLiteral("info")));
+    ui->btnMenu->setIcon(tema::icono(QStringLiteral("menu")));
+    ui->btnMenu->setText(QString());
+    ui->btnMenu->setToolTip(tr("Más opciones: importar, exportar, copia de seguridad…"));
+    ui->layoutSuperior->setSpacing(6);
+
+    // Botones de abajo: Venta y Compra destacados (lo que más se usa), Eliminar en rojo
+    ui->btnAgregar->setIcon(tema::icono(QStringLiteral("agregar")));
+    ui->btnEditar->setIcon(tema::icono(QStringLiteral("editar")));
+    ui->btnEliminar->setIcon(tema::icono(QStringLiteral("borrar"), tema::colores().error));
+    ui->btnCompra->setIcon(tema::icono(QStringLiteral("compra"), tema::colores().sobreAcento));
+    ui->btnVenta->setIcon(tema::icono(QStringLiteral("etiqueta"), tema::colores().sobreAcento));
+    tema::marcarPrimario(ui->btnVenta);
+    tema::marcarPrimario(ui->btnCompra);
+    tema::marcarPeligro(ui->btnEliminar);
+
+    // Atajos de teclado (también en los carteles de ayuda)
+    const auto atajo = [this](const QKeySequence& teclas, QWidget* boton, auto funcion) {
+        auto* corto = new QShortcut(teclas, this, funcion);
+        corto->setContext(Qt::WindowShortcut);
+        if (boton) boton->setToolTip((boton->toolTip().isEmpty() ? QString() : boton->toolTip() + QStringLiteral(" "))
+                                     + QStringLiteral("(%1)").arg(teclas.toString(QKeySequence::NativeText)));
+    };
+    atajo(QKeySequence::Find, ui->inputBuscar, [this] { ui->inputBuscar->setFocus(); ui->inputBuscar->selectAll(); });
+    atajo(QKeySequence::New, ui->btnAgregar, [this] { agregar(); });
+    atajo(QKeySequence(Qt::Key_F2), ui->btnEditar, [this] { editar(); });
+    atajo(QKeySequence(Qt::ALT | Qt::Key_V), ui->btnVenta, [this] { venta(); });
+    atajo(QKeySequence(Qt::ALT | Qt::Key_C), ui->btnCompra, [this] { compra(); });
+    auto* suprimir = new QShortcut(QKeySequence::Delete, ui->tablaProductos, [this] { eliminar(); });
+    suprimir->setContext(Qt::WidgetShortcut);
+    ui->btnEliminar->setToolTip(tr("Eliminar los productos seleccionados (Supr)"));
+    // Esc en el buscador: lo borra y vuelve a la lista completa
+    auto* escape = new QShortcut(QKeySequence(Qt::Key_Escape), ui->inputBuscar, [this] { ui->inputBuscar->clear(); });
+    escape->setContext(Qt::WidgetShortcut);
+
+    // Aviso de arriba (poco stock, vencidos): recuadro de color
+    const QColor a = tema::colores().aviso;
+    ui->labelAvisos->setStyleSheet(QStringLiteral("QLabel { background: rgba(%1, %2, %3, 0.12); border: 1px solid rgba(%1, %2, %3, 0.4);"
+                                                  " border-radius: 8px; padding: 6px 12px; color: %4; }")
+                                       .arg(a.red()).arg(a.green()).arg(a.blue()).arg(tema::colores().texto.name()));
+
+    // La tabla va dentro de una pila: cuando no hay nada para mostrar, se ve el estado vacío
+    pilaTabla_ = new QStackedWidget(this);
+    const int lugar = ui->layoutPrincipal->indexOf(ui->tablaProductos);
+    ui->layoutPrincipal->insertWidget(lugar, pilaTabla_, 1);
+    pilaTabla_->addWidget(ui->tablaProductos);
+    vacio_ = new tema::EstadoVacio(QStringLiteral("paquete"), QString(), QString(), QString(), pilaTabla_);
+    pilaTabla_->addWidget(vacio_);
+    connect(vacio_, &tema::EstadoVacio::accion, this, [this] {
+        if (ui->inputBuscar->text().isEmpty()) agregar();
+        else ui->inputBuscar->clear();
+    });
+    ui->tablaProductos->verticalHeader()->setDefaultSectionSize(ui->tablaProductos->fontMetrics().height() + 12);
+
+    // Resumen de abajo como «chips»: los de avisos abren la lista de avisos
+    chipTotal_ = new QLabel(this);
+    tema::marcarChip(chipTotal_, tema::Estado::Neutro);
+    statusBar()->addWidget(chipTotal_);
+    const auto chip = [this] {
+        auto* boton = new QPushButton(this);
+        boton->setCursor(Qt::PointingHandCursor);
+        boton->setToolTip(tr("Ver la lista de avisos"));
+        connect(boton, &QPushButton::clicked, this, [this] { abrirReportes(true); });
+        statusBar()->addWidget(boton);
+        return boton;
+    };
+    chipBajos_ = chip();
+    chipVencidos_ = chip();
+    chipPorVencer_ = chip();
+    statusBar()->setStyleSheet(QStringLiteral("QStatusBar::item { border: none; } QStatusBar { padding: 2px 6px; }"));
 }
 
 void VentanaPrincipal::venta() { operacion(TipoOperacion::Venta); }
@@ -862,6 +1042,7 @@ void VentanaPrincipal::actualizarAvisos()
     if (poco) partes << tr("%n con poco stock", nullptr, poco);
     if (vencidos) partes << tr("%n vencido(s)", nullptr, vencidos);
     if (porVencer) partes << tr("%n por vencer", nullptr, porVencer);
-    ui->labelAvisos->setText(QStringLiteral("⚠ %1 · <a href=\"avisos\">Ver</a>").arg(partes.join(QStringLiteral(" · "))));
+    ui->labelAvisos->setText(QStringLiteral("%1 · <a href=\"avisos\" style=\"color:%2\">Ver los avisos</a>")
+                                 .arg(partes.join(QStringLiteral(" · ")), tema::colores().acento.name()));
     ui->labelAvisos->show();
 }

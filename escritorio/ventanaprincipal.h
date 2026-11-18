@@ -2,11 +2,16 @@
 #include "db.h"
 #include <QAbstractItemView>
 #include <QMainWindow>
+#include <QSet>
 #include <QVector>
 #include <memory>
 
+class QLabel;
+class QPushButton;
 class QSettings;
+class QStackedWidget;
 class QStandardItemModel;
+namespace tema { class EstadoVacio; }
 class ServidorSinc;
 namespace Ui { class MainWindow; }
 
@@ -37,6 +42,8 @@ public:
     const QVector<Columna>& columnasVisibles() const { return cols_; }   // las de la tabla, en el orden en que se ven
     int columnaDe(const char* clave) const;                               // lugar en la tabla de una columna del programa (o -1)
     ServidorSinc& servidor() { return *servidor_; }
+    QString textoResumen() const;                                         // «12 productos · 1 con stock bajo…» (abajo)
+    void confirmarEliminados();                                           // borra ya lo que espera el «Deshacer»
 
 public slots:
     void refrescar();             // vuelve a leer la base SIN perder la posición ni la selección
@@ -63,6 +70,8 @@ protected:
 private:
     void armarTabla();
     void armarMenu();
+    void armarEstilo();                              // tema común: íconos, botones destacados, atajos, estado vacío
+    void mostrarResumen(int total, bool conMinimo, int bajos, bool conVence, int vencidos, int porVencer);
     void conectar();
     bool actualizarColumnas();                       // si cambió la estructura de la tabla, la rearma
     void reconstruirColumnas(const QVector<Columna>& nuevas);
@@ -85,6 +94,15 @@ private:
     bool armando_ = false;                           // mientras se rearman las columnas, no se guarda nada
     QString uuidOrden_;                              // por qué columna está ordenada la tabla (y en qué sentido)
     Qt::SortOrder sentidoOrden_ = Qt::AscendingOrder;
+
+    // Estilo (comun/ui)
+    QStackedWidget* pilaTabla_ = nullptr;            // la tabla o, si no hay nada para mostrar, el estado vacío
+    tema::EstadoVacio* vacio_ = nullptr;
+    QLabel* chipTotal_ = nullptr;                    // abajo: cuántos productos hay
+    QPushButton* chipBajos_ = nullptr;               // abajo: con poco stock, vencidos y por vencer (abren los avisos)
+    QPushButton* chipVencidos_ = nullptr;
+    QPushButton* chipPorVencer_ = nullptr;
+    QSet<qint64> porEliminar_;                       // eliminados que todavía se pueden recuperar con «Deshacer»
 
     // Para no perder el lugar cuando se busca
     bool buscando_ = false;

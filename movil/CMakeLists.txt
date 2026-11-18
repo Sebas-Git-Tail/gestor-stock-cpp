@@ -14,12 +14,11 @@ qt_add_qml_module(gsmovil
         qml/PaginaOperacion.qml
         qml/PaginaSincronizacion.qml
         qml/PaginaReportes.qml
-        qml/PaginaApps.qml
     SOURCES
         controlador.h controlador.cpp
 )
 target_include_directories(gsmovil PUBLIC .)
-target_link_libraries(gsmovil PUBLIC gsnucleo Qt6::Quick Qt6::QuickControls2 comun_apps)
+target_link_libraries(gsmovil PUBLIC gsnucleo Qt6::Quick Qt6::QuickControls2 comun_apps comun_ui_qmlplugin)
 
 qt_add_executable(gestor-stock-movil main.cpp)
 target_link_libraries(gestor-stock-movil PRIVATE gsmovil gsmovilplugin)

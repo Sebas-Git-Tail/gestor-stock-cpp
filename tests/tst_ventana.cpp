@@ -557,11 +557,11 @@ private slots:
         auto w = abrir();
         const QModelIndex celda = w->tabla()->model()->index(w->filaDe(idVencido), 1);
         QVERIFY(celda.data(Qt::BackgroundRole).isValid());                          // fila marcada como vencida
-        QVERIFY(w->statusBar()->currentMessage().contains("1 vencidos"));
+        QVERIFY2(w->textoResumen().contains("1 vencidos"), qPrintable(w->textoResumen()));
         QVERIFY(stock_->eliminarColumna(stock_->columnaPorClave("vencimiento")->id).ok);
         w->refrescar();
         QVERIFY(!w->tabla()->model()->index(w->filaDe(idVencido), 1).data(Qt::BackgroundRole).isValid());
-        QVERIFY(!w->statusBar()->currentMessage().contains("vencidos"));
+        QVERIFY(!w->textoResumen().contains("vencidos"));
         QVERIFY(stock_->restaurarColumna(stock_->columnasQuitadas().first().id).ok);   // al volver a ponerla, vuelven los avisos
         w->refrescar();
         QVERIFY(w->tabla()->model()->index(w->filaDe(idVencido), 1).data(Qt::BackgroundRole).isValid());

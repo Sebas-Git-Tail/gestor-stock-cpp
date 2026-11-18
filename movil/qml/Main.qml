@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
+import Comun.Ui
 import GestorStock
 
 ApplicationWindow {
@@ -13,6 +14,7 @@ ApplicationWindow {
     title: "Gestor de Stock"
 
     Material.theme: Material.System
+    Component.onCompleted: Tema.acento = "#2e7d32"   // tema común (Comun.Ui) con el color de la app
     Material.accent: "#2e7d32"
     Material.primary: "#2e7d32"
 
@@ -43,23 +45,10 @@ ApplicationWindow {
         function onCodigoEscaneado(codigo) { if (codigo !== "" && pila.depth === 1) App.busqueda = codigo }
     }
 
-    // Mensajito abajo («Producto guardado», «Sincronizado…»)
-    function avisar(texto) { aviso.texto = texto; aviso.open() }
+    // Mensajito abajo («Guardado», «Sincronizado…»): AvisoFlotante de Comun.Ui
+    function avisar(texto) { aviso.mostrar(texto) }
     Connections { target: App; function onAviso(texto) { ventana.avisar(texto) } }
-    Popup {
-        id: aviso
-        property string texto
-        x: (ventana.width - width) / 2
-        y: ventana.height - height - 90
-        width: Math.min(ventana.width - 32, etiquetaAviso.implicitWidth + 32)
-        padding: 12
-        modal: false
-        closePolicy: Popup.CloseOnPressOutside
-        background: Rectangle { radius: 8; color: ventana.oscuro ? "#f0efec" : "#2c2c2a" }
-        contentItem: Label { id: etiquetaAviso; text: aviso.texto; wrapMode: Text.WordWrap; color: ventana.oscuro ? "#0b0b0b" : "#f0efec" }
-        onOpened: cerrarAviso.restart()
-        Timer { id: cerrarAviso; interval: 3500; onTriggered: aviso.close() }
-    }
+    AvisoFlotante { id: aviso; margenAbajo: 90 }
 
     header: ToolBar {
         Material.foreground: "white"
@@ -147,7 +136,8 @@ ApplicationWindow {
                 ItemDelegate {
                     Layout.fillWidth: true
                     visible: App.resumenAlertas !== ""
-                    text: "⚠ " + App.resumenAlertas + " · Ver"
+                    text: App.resumenAlertas + " · Ver"
+                    icon.source: Tema.icono("aviso")
                     onClicked: ventana.abrir("avisos")
                     background: Rectangle { color: ventana.oscuro ? "#5a4d10" : "#fff1aa" }
                 }
@@ -179,14 +169,16 @@ ApplicationWindow {
                             Label { text: modelData.cantidad; font.pixelSize: 24; font.bold: true }
                         }
                     }
-                    Label {
+                    EstadoVacio {
                         anchors.centerIn: parent
-                        visible: lista.count === 0
                         width: parent.width - 48
-                        horizontalAlignment: Text.AlignHCenter
-                        wrapMode: Text.WordWrap
-                        color: ventana.tintaApagada
-                        text: App.busqueda !== "" ? "No hay productos que coincidan." : "Todavía no hay productos. Tocá «+ Producto» o sincronizá con la PC."
+                        visible: lista.count === 0
+                        icono: App.busqueda !== "" ? "buscar" : "paquete"
+                        titulo: App.busqueda !== "" ? "No hay productos que coincidan" : "Todavía no hay productos"
+                        texto: App.busqueda !== "" ? "Probá con otra palabra, un código o un precio."
+                                                   : "Agregá el primero o sincronizá con la PC para traer la lista."
+                        textoBoton: App.busqueda !== "" ? "Limpiar la búsqueda" : "Agregar un producto"
+                        onAccion: App.busqueda !== "" ? App.busqueda = "" : ventana.editar(0)
                     }
                 }
                 RowLayout {
@@ -206,7 +198,7 @@ ApplicationWindow {
     Component { id: paginaOperacion; PaginaOperacion {} }
     Component { id: paginaSinc; PaginaSincronizacion {} }
     Component { id: paginaReportes; PaginaReportes {} }
-    Component { id: paginaApps; PaginaApps {} }
+    Component { id: paginaApps; PaginaApps { conBarra: true; nombreApp: "Gestor de Stock" } }
 
     // Versión nueva de la app (se busca una vez por día): pregunta y abre el instalador de Android
     Timer { interval: 4000; running: true; onTriggered: Apps.buscarActualizacion(false) }
