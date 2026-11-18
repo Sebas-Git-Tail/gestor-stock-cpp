@@ -59,7 +59,7 @@ int anchoPorDefecto(const Columna& c)
 
 constexpr int ROL_ID = Qt::UserRole + 1;      // el id del producto va en cada celda de la fila
 
-// (fondo, texto) para resaltar filas: el color del aviso mezclado con el fondo de la tabla (tema oscuro)
+// (fondo, texto) para resaltar filas: el color del aviso mezclado con el fondo de la tabla (claro u oscuro)
 QColor mezclar(const QColor& a, const QColor& b, double t)
 {
     return QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t, a.greenF() + (b.greenF() - a.greenF()) * t,
@@ -69,7 +69,7 @@ struct ColoresFila { QColor fondo, texto; };
 ColoresFila colorFila(tema::Estado estado, double fuerza)
 {
     const QColor base = tema::colores().superficie, c = tema::color(estado);
-    return {mezclar(base, c, fuerza), mezclar(c, QColor(Qt::white), 0.35)};
+    return {mezclar(base, c, fuerza), mezclar(c, tema::oscuro() ? QColor(Qt::white) : QColor(Qt::black), 0.35)};
 }
 
 QString campoCsv(const QString& s)
@@ -572,6 +572,7 @@ void VentanaPrincipal::armarEstilo()
     ui->actionExportar->setIcon(tema::icono(QStringLiteral("descargar")));
     ui->actionBackup->setIcon(tema::icono(QStringLiteral("respaldo")));
     ui->actionAcerca->setIcon(tema::icono(QStringLiteral("info")));
+    ui->layoutSuperior->insertWidget(ui->layoutSuperior->indexOf(ui->btnMenu), tema::botonModo(this));   // claro / oscuro
     ui->btnMenu->setIcon(tema::icono(QStringLiteral("menu")));
     ui->btnMenu->setText(QString());
     ui->btnMenu->setToolTip(tr("Más opciones: importar, exportar, copia de seguridad…"));
@@ -607,10 +608,15 @@ void VentanaPrincipal::armarEstilo()
     escape->setContext(Qt::WidgetShortcut);
 
     // Aviso de arriba (poco stock, vencidos): recuadro de color
-    const QColor a = tema::colores().aviso;
-    ui->labelAvisos->setStyleSheet(QStringLiteral("QLabel { background: rgba(%1, %2, %3, 0.12); border: 1px solid rgba(%1, %2, %3, 0.4);"
-                                                  " border-radius: 8px; padding: 6px 12px; color: %4; }")
-                                       .arg(a.red()).arg(a.green()).arg(a.blue()).arg(tema::colores().texto.name()));
+    const auto estiloAvisos = [this] {
+        const QColor a = tema::colores().aviso;
+        ui->labelAvisos->setStyleSheet(QStringLiteral("QLabel { background: rgba(%1, %2, %3, 0.12); border: 1px solid rgba(%1, %2, %3, 0.4);"
+                                                      " border-radius: 8px; padding: 6px 12px; color: %4; }")
+                                           .arg(a.red()).arg(a.green()).arg(a.blue()).arg(tema::colores().texto.name()));
+    };
+    estiloAvisos();
+    // Al cambiar de modo: el recuadro de avisos, los chips de abajo y los colores de las filas
+    tema::alCambiarModo(this, [this, estiloAvisos] { estiloAvisos(); refrescar(); });
 
     // La tabla va dentro de una pila: cuando no hay nada para mostrar, se ve el estado vacío
     pilaTabla_ = new QStackedWidget(this);

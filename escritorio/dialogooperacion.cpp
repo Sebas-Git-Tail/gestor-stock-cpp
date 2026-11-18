@@ -1,3 +1,4 @@
+#include "Tema.h"
 #include "dialogooperacion.h"
 #include "ui_dialogo_operacion.h"
 #include "util.h"
@@ -151,11 +152,11 @@ void DialogoOperacion::agregarProducto(qint64 id)
         vence->setText(f.toString(QStringLiteral("dd/MM/yyyy")));
         switch (estadoVencimiento(p.vencimiento)) {
         case EstadoVencimiento::Vencido:
-            vence->setForeground(QColor(190, 30, 30));
+            vence->setForeground(tema::color(tema::Estado::Error));
             vence->setToolTip(tr("¡Vencido!"));
             break;
         case EstadoVencimiento::PorVencer:
-            vence->setForeground(QColor(170, 110, 0));
+            vence->setForeground(tema::color(tema::Estado::Aviso));
             vence->setToolTip(tr("Vence pronto"));
             break;
         default: break;
@@ -238,7 +239,7 @@ void DialogoOperacion::recalcular()
         total += subtotal;
         ui->tablaLineas->item(f, ColSubtotal)->setText(venta_ || subtotal > 0 ? formatearPrecio(subtotal) : QString());
         const bool sinStock = cantidad <= 0;
-        nombre->setForeground(sinStock ? QBrush(QColor(190, 30, 30)) : QBrush());
+        nombre->setForeground(sinStock ? QBrush(tema::color(tema::Estado::Error)) : QBrush());
         if (sinStock) todoBien = false;
     }
     total = std::round(total * 100.0) / 100.0;

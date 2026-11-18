@@ -1,3 +1,4 @@
+#include "Tema.h"
 #include "dialogoreportes.h"
 #include "ui_dialogo_reportes.h"
 
@@ -144,7 +145,7 @@ void DialogoReportes::cargarAvisos()
     ui->tablaAvisos->setRowCount(int(avisos.size()));
     for (int i = 0; i < avisos.size(); ++i) {
         ponerFila(ui->tablaAvisos, i, {avisos[i].nombre, avisos[i].detalle});
-        const QColor color = avisos[i].tipo == Alerta::Tipo::PorVencer ? QColor(170, 110, 0) : QColor(190, 30, 30);
+        const QColor color = avisos[i].tipo == Alerta::Tipo::PorVencer ? tema::color(tema::Estado::Aviso) : tema::color(tema::Estado::Error);
         ui->tablaAvisos->item(i, 1)->setForeground(color);
         ui->tablaAvisos->item(i, 1)->setTextAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     }

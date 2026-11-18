@@ -16,12 +16,12 @@
 int main(int argc, char* argv[])
 {
     QApplication app(argc, argv);
-    tema::aplicar(app, QColor(0x3a, 0xa7, 0x6d));   // tema oscuro común con el verde del gestor (comun/ui)
     apps::cargarTraduccionesQt();   // botones estándar en español (comun/apps; Android y Windows no traen la traducción)
     QApplication::setApplicationName(QStringLiteral("gestor-stock"));
     QApplication::setApplicationDisplayName(QStringLiteral("Gestor de Stock"));
     QApplication::setApplicationVersion(QStringLiteral(GS_VERSION));
     QApplication::setDesktopFileName(QStringLiteral("gestor-stock"));      // lo une con gestor-stock.desktop en Plasma
+    tema::aplicar(app, QColor(0x3a, 0xa7, 0x6d));   // tema común (claro u oscuro) con el verde del gestor (comun/ui)
     QApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("Logo")));
 
     // Botones estándar (Aceptar, Cancelar, Sí, No...) en el idioma del sistema, si está instalado qt6-translations

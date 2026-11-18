@@ -14,7 +14,7 @@ ApplicationWindow {
     visible: true
     title: "Gestor de Stock"
 
-    Material.theme: Material.System
+    Material.theme: Tema.oscuro ? Material.Dark : Material.Light   // claro u oscuro: lo elige el menú (Tema.alternar)
     Component.onCompleted: Tema.acento = "#2e7d32"   // tema común (Comun.Ui) con el color de la app
     Material.accent: "#2e7d32"
     Material.primary: "#2e7d32"
@@ -107,6 +107,12 @@ ApplicationWindow {
                     destacado: modelData.accion === "apps" && Apps.versionNueva !== ""
                     onClicked: { menu.close(); ventana.abrir(modelData.accion) }
                 }
+            }
+            Rectangle { Layout.fillWidth: true; Layout.topMargin: 8; Layout.bottomMargin: 8; Layout.preferredHeight: 1; color: ventana.borde }
+            ItemMenu {   // el menú queda abierto: se ve el cambio enseguida
+                text: Tema.textoAlternar
+                icono: Tema.iconoAlternar
+                onClicked: Tema.alternar()
             }
             Item { Layout.fillHeight: true }
         }
