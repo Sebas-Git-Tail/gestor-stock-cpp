@@ -124,6 +124,8 @@ void TarjetaAccion::changeEvent(QEvent *evento)
     if (evento->type() == QEvent::EnabledChange) {
         setCursor(isEnabled() ? Qt::PointingHandCursor : Qt::ArrowCursor);
         pintarIcono();
+    } else if (evento->type() == QEvent::PaletteChange) {
+        pintarIcono();     // cambió el modo claro/oscuro
     }
     QFrame::changeEvent(evento);
 }
@@ -136,6 +138,7 @@ EstadoVacio::EstadoVacio(const QString &icono, const QString &titulo, const QStr
 {
     auto *dibujo = new QLabel(this);
     dibujo->setPixmap(pixmap(icono, 56, colores().texto3, devicePixelRatioF()));
+    alCambiarModo(dibujo, [dibujo, icono] { dibujo->setPixmap(pixmap(icono, 56, colores().texto3, dibujo->devicePixelRatioF())); });
     dibujo->setAlignment(Qt::AlignCenter);
 
     etiquetaTitulo = new QLabel(titulo, this);
