@@ -3,6 +3,8 @@
 //   EstadoVacio    lo que se ve cuando una lista está vacía: ícono, texto y un botón
 //   avisar()       aviso flotante abajo de la ventana que se va solo (opcionalmente con
 //                  un botón, p. ej. «Deshacer»)
+//   recordarVentana()  la ventana se vuelve a abrir con el tamaño que tenía (y maximizada o en
+//                  pantalla completa, si lo estaba)
 
 #pragma once
 
@@ -16,6 +18,7 @@
 
 class QLabel;
 class QPushButton;
+class QSettings;
 class QTimer;
 
 namespace tema {
@@ -87,5 +90,11 @@ void avisar(QWidget *ventana, const QString &texto, const OpcionesAviso &opcione
 
 // Confirma ya el aviso que esté abierto (llama a su alVencer): usar al cerrar la ventana
 void cerrarAvisos(QWidget *ventana);
+
+// Ancho y alto de «ventana» (y la posición, donde el sistema lo deja: en Wayland no), y si estaba
+// maximizada o en pantalla completa. Lo pone ahora (llamar antes de show()) y lo guarda al cerrarla o
+// al salir de la app, en «clave» de QSettings() (o de «ajustes», si se pasa). En Android no hace nada.
+void recordarVentana(QWidget *ventana, QSettings *ajustes = nullptr,
+                     const QString &clave = QStringLiteral("ventana/geometria"));
 
 } // namespace tema

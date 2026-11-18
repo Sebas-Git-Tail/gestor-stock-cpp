@@ -40,8 +40,10 @@ public:
     // Busca la última versión: emite encontrada() (y además hayVersionNueva() si es más nueva que la
     // instalada) o noEncontrada(). Con la variable COMUN_APPS_SIN_RED=1 no sale a la red (pruebas).
     void buscar();
-    // Como buscar(), pero como mucho una vez por día (para el aviso al abrir la app)
+    // Para el aviso al abrir la app: busca siempre (así la app puede marcar que hay una versión nueva cada
+    // vez que se abre), pero tocaAvisar() es verdadero como mucho una vez por día (para preguntar «¿La instalo?»)
     void buscarUnaVezPorDia();
+    bool tocaAvisar() const { return tocaAvisar_; }
     void descargarEInstalar();     // después de encontrada()
 
     QString version() const { return disponible_.version.toString(); }
@@ -62,6 +64,7 @@ signals:
     void instalado(const QString &version);         // terminó la instalación (Linux) o se abrió el instalador
 
 private:
+    void empezarBusqueda();
     void probar(int fuente, int raiz);
     void terminarBusqueda();
     void instalar(const QString &archivo);
@@ -69,6 +72,7 @@ private:
     InfoApp app_;
     bool esEstaApp_;
     bool ocupado_ = false;
+    bool tocaAvisar_ = false;
     Candidato disponible_;
     QVersionNumber instalada_;
 #ifndef Q_OS_ANDROID

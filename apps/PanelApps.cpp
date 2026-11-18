@@ -324,8 +324,8 @@ void avisarActualizaciones(QWidget *ventana, const QString &estaApp)
         return;
     auto *act = new Actualizador(*info, true, ventana);
     QPointer<QWidget> v(ventana);
-    QObject::connect(act, &Actualizador::hayVersionNueva, ventana, [v, estaApp] {
-        if (v)
+    QObject::connect(act, &Actualizador::hayVersionNueva, ventana, [act, v, estaApp] {
+        if (v && act->tocaAvisar())
             mostrarApps(v, estaApp);
     });
     act->buscarUnaVezPorDia();
@@ -336,7 +336,7 @@ void avisarActualizaciones(QWidget *ventana, const QString &estaApp)
     auto *act = new Actualizador(*app, true, ventana);
     QPointer<QWidget> v(ventana);
     QObject::connect(act, &Actualizador::hayVersionNueva, ventana, [act, v](const QString &version) {
-        if (!v)
+        if (!v || !act->tocaAvisar())     // se pregunta como mucho una vez por día
             return;
         const auto respuesta = QMessageBox::question(v, QObject::tr("Versión nueva"),
             QObject::tr("Hay una versión nueva de %1: la %2 (tenés la %3).\n\n¿La instalo ahora?")

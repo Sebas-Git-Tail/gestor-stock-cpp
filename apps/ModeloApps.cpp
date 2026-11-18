@@ -19,6 +19,15 @@ ModeloApps::ModeloApps(const QString &estaApp, QObject *parent)
         connect(propia_, &Actualizador::hayVersionNueva, this, [this](const QString &v) {
             versionNueva_ = v;
             emit versionNuevaCambio();
+            if (propia_->tocaAvisar())
+                emit avisoVersionNueva(v);
+        });
+        // Encontró la última y no es más nueva que la instalada (p. ej. ya se actualizó): ya no hay nada que marcar
+        connect(propia_, &Actualizador::encontrada, this, [this] {
+            if (versionNueva_.isEmpty() || propia_->instalada().isNull() || propia_->disponible() > propia_->instalada())
+                return;
+            versionNueva_.clear();
+            emit versionNuevaCambio();
         });
         connect(propia_, &Actualizador::progreso, this, [this](qint64 recibido, qint64 total) {
             progresoPropio_ = total > 0 ? double(recibido) / double(total) : -1;

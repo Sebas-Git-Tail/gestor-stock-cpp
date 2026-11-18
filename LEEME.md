@@ -40,10 +40,17 @@ carpeta `android/src` (los proyectos tienen un enlace a ese archivo).
   `tema::aplicar(app)` (celeste del sitio) o `tema::aplicar(app, QColor("#e8a838"))` (otro acento). Marcas por propiedad:
   `tema::marcarPrimario(boton)`, `tema::marcarPeligro(boton)`, `tema::marcarChip(etiqueta, tema::Estado::Ok)`,
   `tema::mostrarEstado(etiqueta, texto, estado)` (texto de color en vez de ✓/✗), `lista->setProperty("lateral", true)`.
+  Ventana principal: `tema::recordarVentana(&ventana)` antes de `show()` (vuelve a abrir con el mismo ancho y alto, y
+  maximizada o en pantalla completa si lo estaba; se guarda en `ventana/geometria` de QSettings).
 - **QML:** `set(COMUN_UI_QML ON)`, enlazar `comun_ui_qmlplugin`, en `main.cpp`
   `#include <QtQml/qqmlextensionplugin.h>` + `Q_IMPORT_QML_PLUGIN(Comun_UiPlugin)` (también en las pruebas que carguen QML) y en
   QML `import Comun.Ui`. El acento de cada app: `Tema.acento = "#2e7d32"`. `PaginaApps { conBarra: true }` para apps donde cada
   página trae su barra. Las páginas del módulo se abren con un `Component`, no por nombre de archivo.
+- **Menú de 3 rayitas (Android):** `BotonMenu { punto: Apps.versionNueva !== ""; onClicked: menu.open() }` en la barra
+  (puntito naranja cuando hay versión nueva) y en el `Drawer` cada opción con `ItemMenu { text: …; icono: … }`; la de
+  «Apps y actualizaciones» con `destacado: Apps.versionNueva !== ""` (naranja + «Nueva versión»). La pregunta «¿La
+  instalo?» va en `Connections { target: Apps; function onAvisoVersionNueva() {…} }` (una vez por día); `versionNueva`
+  queda puesta cada vez que se abre la app (se busca siempre).
 - **Íconos:** SVG de 24×24 con trazo `#000000` (se reemplaza por el color pedido). Para agregar uno: el .svg en `ui/iconos/` y
   una línea en `ui/iconos/iconos.qrc` (QML los toma solo, con un glob).
 - No usar emojis ni símbolos raros (☰ ⚠ 🔄) en la interfaz: en algunos celulares y en Windows salen como cuadraditos o con

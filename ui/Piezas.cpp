@@ -1,11 +1,13 @@
 #include "Piezas.h"
 
 #include <QBoxLayout>
+#include <QCoreApplication>
 #include <QEvent>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QSettings>
 #include <QTimer>
 
 namespace tema {
@@ -319,6 +321,61 @@ void cerrarAvisos(QWidget *widget)
         return;
     if (ControlAviso *control = avisoAbierto(ventana))
         control->resolver(false);
+}
+
+// ─── recordarVentana ────────────────────────────────────────────────────────
+
+namespace {
+
+// Vive como hijo de la ventana: guarda su geometría al cerrarla (o al salir de la app)
+class Recordador : public QObject
+{
+public:
+    Recordador(QWidget *ventana, QSettings *ajustes, const QString &clave)
+        : QObject(ventana), ventana_(ventana), ajustes_(ajustes), clave_(clave)
+    {
+        ventana->installEventFilter(this);
+        connect(qApp, &QCoreApplication::aboutToQuit, this, &Recordador::guardar);
+    }
+
+    void guardar()
+    {
+        // saveGeometry() incluye el tamaño «normal» y si está maximizada o en pantalla completa
+        const QByteArray geometria = ventana_->saveGeometry();
+        if (ajustes_)
+            ajustes_->setValue(clave_, geometria);
+        else
+            QSettings().setValue(clave_, geometria);
+    }
+
+protected:
+    bool eventFilter(QObject *objeto, QEvent *evento) override
+    {
+        if (objeto == ventana_ && evento->type() == QEvent::Close)
+            guardar();
+        return false;
+    }
+
+private:
+    QWidget *ventana_;
+    QPointer<QSettings> ajustes_;
+    QString clave_;
+};
+
+} // namespace
+
+void recordarVentana(QWidget *ventana, QSettings *ajustes, const QString &clave)
+{
+#ifdef Q_OS_ANDROID
+    Q_UNUSED(ventana)
+    Q_UNUSED(ajustes)
+    Q_UNUSED(clave)
+#else
+    const QByteArray geometria = ajustes ? ajustes->value(clave).toByteArray() : QSettings().value(clave).toByteArray();
+    if (!geometria.isEmpty())
+        ventana->restoreGeometry(geometria);
+    new Recordador(ventana, ajustes, clave);
+#endif
 }
 
 } // namespace tema

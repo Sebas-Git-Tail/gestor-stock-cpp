@@ -105,21 +105,28 @@ Actualizador::Actualizador(const InfoApp &app, bool esEstaApp, QObject *parent)
 
 void Actualizador::buscarUnaVezPorDia()
 {
-    QSettings ajustes;
-    const QString clave = QStringLiteral("actualizador/%1/ultima").arg(app_.id);
-    const QDateTime ultima = ajustes.value(clave).toDateTime();
-    if (ultima.isValid() && ultima.secsTo(QDateTime::currentDateTime()) < 24 * 3600)
+    if (ocupado_)
         return;
-    connect(this, &Actualizador::encontrada, this, [clave] {
-        QSettings().setValue(clave, QDateTime::currentDateTime());
-    }, Qt::SingleShotConnection);
-    buscar();
+    const QString clave = QStringLiteral("actualizador/%1/ultima").arg(app_.id);
+    const QDateTime ultima = QSettings().value(clave).toDateTime();
+    tocaAvisar_ = !ultima.isValid() || ultima.secsTo(QDateTime::currentDateTime()) >= 24 * 3600;
+    if (tocaAvisar_)
+        connect(this, &Actualizador::encontrada, this, [clave] {
+            QSettings().setValue(clave, QDateTime::currentDateTime());
+        }, Qt::SingleShotConnection);
+    empezarBusqueda();
 }
 
 void Actualizador::buscar()
 {
     if (ocupado_)
         return;
+    tocaAvisar_ = false;
+    empezarBusqueda();
+}
+
+void Actualizador::empezarBusqueda()
+{
     const Sistema sistema = sistemaActual();
     // COMUN_APPS_SIN_RED=1: las pruebas de las apps abren las pantallas sin salir a internet
     if (!app_.disponibleEn(sistema) || qEnvironmentVariableIntValue("COMUN_APPS_SIN_RED") == 1) {
