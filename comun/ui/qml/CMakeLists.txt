@@ -16,7 +16,7 @@ qt_add_qml_module(comun_ui_qml
     QML_FILES
         Tema.qml Icono.qml Seccion.qml Chip.qml Dialogo.qml Hoja.qml Segmentos.qml
         TarjetaHerramienta.qml TarjetaEstado.qml Avisos.qml EstadoVacio.qml AvisoFlotante.qml
-        PaginaApps.qml BotonMenu.qml ItemMenu.qml
+        PaginaApps.qml BotonMenu.qml ItemMenu.qml DialogoNovedades.qml
 )
 target_link_libraries(comun_ui_qml PUBLIC Qt6::Quick Qt6::QuickControls2 Qt6::QmlCore)   # QmlCore: Settings del modo claro/oscuro
 

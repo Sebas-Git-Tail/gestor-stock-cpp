@@ -5,8 +5,10 @@
 #   COMUN_DESCARGAS_NUCLEO  lo mismo sin el diálogo (sin Widgets): opciones de pistas, consulta y resumen  (Android-Manager, QML)
 #   COMUN_RED        pedidos HTTP, servidor.json y aviso de versiones nuevas  (Android/Windows-Manager, Bodrio)
 #   COMUN_SINC       sincronización cifrada PC ↔ celular                      (gestor de stock, ingresos y gastos)
-#   COMUN_APPS       actualizarse sola e instalar las otras apps (prende COMUN_RED)      (todas)
-#   COMUN_APPS_WIDGETS  la página/ventana «Apps» y el aviso de versión nueva con Widgets (todas menos las de QML)
+#   COMUN_APPS       actualizarse sola e instalar las otras apps (prende COMUN_RED), novedades e informe de
+#                    fallas (soporte/)                                                       (todas)
+#   COMUN_APPS_WIDGETS  la página/ventana «Apps», el aviso de versión nueva y la ventana de novedades con
+#                    Widgets (todas menos las de QML)
 #   COMUN_UI         tema oscuro común, íconos SVG, tarjetas, avisos y estado vacío con Widgets  (las de Widgets)
 #   COMUN_UI_QML     lo mismo para QML: módulo «Comun.Ui» (Tema, Tarjeta, Chip, Avisos, Dialogo...)  (las de QML)
 # Para probarlo solo: cmake -S . -B build -G Ninja -DCOMUN_PRUEBAS=ON && cmake --build build && ctest --test-dir build
@@ -91,18 +93,26 @@ if(COMUN_SINC)
 endif()
 
 if(COMUN_APPS)
-    find_package(Qt6 REQUIRED COMPONENTS Core Network)
+    find_package(Qt6 REQUIRED COMPONENTS Core Gui Network)
     add_library(comun_apps STATIC
         apps/CatalogoApps.cpp apps/CatalogoApps.h
         apps/Actualizador.cpp apps/Actualizador.h
         apps/ModeloApps.cpp apps/ModeloApps.h
-        apps/Traducciones.cpp apps/Traducciones.h apps/traducciones/traducciones.qrc)
+        apps/Traducciones.cpp apps/Traducciones.h apps/traducciones/traducciones.qrc
+        soporte/Novedades.cpp soporte/Novedades.h
+        soporte/Fallas.cpp soporte/Fallas.h)
     set_target_properties(comun_apps PROPERTIES AUTOMOC ON AUTORCC ON)
-    target_include_directories(comun_apps PUBLIC apps)
-    target_link_libraries(comun_apps PUBLIC comun_red Qt6::Core Qt6::Network)
+    target_include_directories(comun_apps PUBLIC apps soporte)
+    target_link_libraries(comun_apps PUBLIC comun_red Qt6::Core Qt6::Gui Qt6::Network)
     if(WIN32)
         target_link_libraries(comun_apps PRIVATE shell32)
     endif()
+    # Mete el NOVEDADES.md de la app en el programa como «:/novedades/NOVEDADES.md» (lo lee soporte::Novedades):
+    #   comun_novedades(MiApp ${CMAKE_CURRENT_SOURCE_DIR}/../NOVEDADES.md)
+    function(comun_novedades destino archivo)
+        set_source_files_properties("${archivo}" PROPERTIES QT_RESOURCE_ALIAS NOVEDADES.md)
+        qt_add_resources(${destino} comun_novedades_${destino} PREFIX /novedades FILES "${archivo}")
+    endfunction()
     # En Android: Instalador.java y ProveedorArchivos.java están en red/android (como ClienteHttp.java);
     # la app enlaza apps/android/res/xml/rutas_archivos.xml y declara permiso, proveedor y <queries>
     # (ver red/android/com/sebastian/comun/Instalador.java). Necesita androidx.core.
@@ -125,7 +135,8 @@ endif()
 
 if(COMUN_APPS_WIDGETS)
     find_package(Qt6 REQUIRED COMPONENTS Widgets)
-    add_library(comun_apps_widgets STATIC apps/PanelApps.cpp apps/PanelApps.h)
+    add_library(comun_apps_widgets STATIC apps/PanelApps.cpp apps/PanelApps.h
+        soporte/VentanaNovedades.cpp soporte/VentanaNovedades.h)
     set_target_properties(comun_apps_widgets PROPERTIES AUTOMOC ON)
     target_link_libraries(comun_apps_widgets PUBLIC comun_apps comun_ui Qt6::Widgets)
 endif()

@@ -25,4 +25,12 @@ void pedir(QObject *contexto, const QUrl &direccion, Respuesta alTerminar);
 using Terminado = std::function<void(int codigo)>;
 void descargar(QObject *contexto, const QUrl &direccion, const QString &ruta, Terminado alTerminar);
 
+// Corta la descarga() en curso a esa ruta: su alTerminar recibe 0 y no queda el archivo a medias.
+void cancelarDescarga(const QString &ruta);
+
+// POST con un cuerpo JSON (APIs como la de descargas_web del servidor). A diferencia de pedir(),
+// el cuerpo llega también con los errores (4xx/5xx), para poder mostrar el mensaje del servidor.
+// «segundos»: cuánto se espera la respuesta (algunas operaciones del servidor tardan).
+void enviar(QObject *contexto, const QUrl &direccion, const QByteArray &json, Respuesta alTerminar, int segundos = 30);
+
 }

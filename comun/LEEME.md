@@ -9,6 +9,7 @@ Código que comparten mis programas en C++ / Qt 6, para no tener la misma copia 
 | `red/` | Pedidos HTTP(S) que andan igual en la PC y en Android (`ClienteHttp`), datos del servidor desde `servidor.json` (`ConfigServidor`), aviso de versión nueva desde GitHub (`Actualizaciones`) | Android-Manager, Windows-Manager, Bodrio Supremo |
 | `sinc/` | Sincronización PC ↔ celular **cifrada** (`ServidorSincBase`, `ClienteSincBase`) | gestor-stock-cpp, ingresos-gastos |
 | `apps/` | Catálogo de los programas, **actualizarse sola** e **instalar las otras apps** (`Actualizador`, `ModeloApps` para QML y Widgets, `PanelApps`/`DialogoApps`, `avisarActualizaciones`) | todos |
+| `soporte/` | **Novedades** de cada versión (lo «[Sebastián]» solo en sus equipos) e **informe de fallas** al servidor (`Novedades`, `Fallas`, `VentanaNovedades`; en QML `DialogoNovedades`). Va dentro de `comun_apps` | todos |
 | `ui/` | **Tema e interfaz comunes.** Widgets (`COMUN_UI`, `comun_ui`): `tema::aplicar(app, acento)` (oscuro, con los colores del sitio), íconos SVG de trazo pintados del color que se pida (`tema::icono("buscar")`, en `ui/iconos/`), botones destacados/peligro, chips de estado, `TarjetaAccion`, `EstadoVacio` y avisos flotantes con «Deshacer» (`tema::avisar`). QML (`COMUN_UI_QML`, módulo `Comun.Ui`): `Tema`, `Icono`, `Seccion`, `Chip`, `Segmentos`, `Hoja`, `Dialogo`, `TarjetaHerramienta`, `TarjetaEstado`, `Avisos`, `EstadoVacio`, `AvisoFlotante` y la página `PaginaApps` | todos |
 | `terceros/monocypher/` | [Monocypher](https://monocypher.org) 4.0.2 (CC0 / BSD-2): X25519, Elligator, BLAKE2b y XChaCha20-Poly1305, sin OpenSSL | `sinc/` |
 
@@ -80,6 +81,31 @@ carpeta `android/src` (los proyectos tienen un enlace a ese archivo).
   (`android:authorities="${applicationId}.archivos"`) y `<queries>` con los paquetes de las otras apps.
 - Para publicar una versión alcanza con subir el archivo con el nombre de siempre al release de GitHub
   (o dejarlo en la carpeta del servidor, para Bodrio y Carina).
+
+## Novedades e informe de fallas (soporte/)
+- **NOVEDADES.md** en la raíz de cada app, metido en el programa con `comun_novedades(<ejecutable> <ruta>/NOVEDADES.md)`
+  (después de `add_subdirectory(comun)`). Formato: `## 1.9.0 (21/11/2026)` y debajo `- cambio` (puede seguir en
+  la línea de abajo, con sangría). Un cambio que empieza con **`[Sebastián]`** solo se ve en sus equipos; una
+  versión sin nada para mostrar no aparece. Al sacar una versión: anotar ahí lo que cambió (para quien lo usa,
+  sin jerga) **antes** de compilar.
+- **Equipos de Sebastián:** PC con el archivo `~/.config/comun-qt/desarrollador` (Windows: `%LOCALAPPDATA%\comun-qt\desarrollador`;
+  Arch-Linux-Manager lo crea en pc e instituto); Android: dejar apretado «Novedades» en el menú (se guarda en la app).
+  `COMUN_DESARROLLADOR=1/0` manda sobre todo (pruebas).
+- **Al abrir:** si la versión es más nueva que la última vista (`novedades/vista` en QSettings), muestra lo de las
+  versiones entre las dos (si nunca vio ninguna, solo la actual). Widgets: `soporte::novedadesAlAbrir(ventana)` y
+  `soporte::botonNovedades(this)` (regalito al lado del de modo) o `soporte::mostrarNovedades(this)` desde un menú.
+  QML: propiedad de contexto `Novedades` (`new soporte::Novedades(&app)`), `DialogoNovedades { id: novedades }` en
+  Main.qml e `ItemMenu { text: "Novedades"; onClicked: novedades.abrirTodas(); onPressAndHold: novedades.alternarDesarrollador() }`.
+- **Fallas:** `soporte::iniciarFallas()` en main, después de setApplicationName/Version. Guarda un registro (qInfo y
+  más graves, limpio: carpeta personal → `~`, usuario, URLs solo con el sitio, correos) y arma un informe cuando:
+  la app se cerró sin terminar bien (marca `proceso-<pid>.marca`; con la señal o la excepción si la hubo), qFatal,
+  qCritical, errores de QML (TypeError, ReferenceError…) o `soporte::informar(contexto, detalle)`. El mismo error una
+  vez por versión, 8 por día como mucho; los pendientes quedan en `<AppLocalData>/fallas/pendientes` y se mandan a
+  `<servidor>/fallas/api/informe` (fallas_web.py en ~/Scripts/Claude/servidor-web). En Android, que el sistema cierre
+  la app en segundo plano no cuenta. Si el QML no carga: `Fallas::instancia().informarYSalir("qml", …, 1)`.
+  Pruebas: `COMUN_FALLAS_SIN_RED=1` (no manda) y `COMUN_FALLAS_URL` (adónde).
+- **Ver los informes:** http://100.101.213.44:8080/fallas/ (solo Tailscale o la red de casa; por Cloudflare/Funnel da 404).
+  Los archivos: `~/.local/share/fallas-apps/` en el servidor.
 
 ## Sincronización (versión 2)
 - **Emparejar** con un código de 6 números: intercambio de claves CPace (X25519 + Elligator). El código
