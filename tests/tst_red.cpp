@@ -108,6 +108,44 @@ private slots:
         QTRY_COMPARE(codigo, 404);
         QVERIFY(!QFile::exists(otra));          // sin archivo a medias
     }
+
+    // enviar(): POST con JSON; con un error HTTP también llega el cuerpo (el mensaje del servidor)
+    void enviarJson()
+    {
+        QTcpServer servidor;
+        QVERIFY(servidor.listen(QHostAddress::LocalHost));
+        QByteArray recibido;
+        connect(&servidor, &QTcpServer::newConnection, this, [&] {
+            QTcpSocket *s = servidor.nextPendingConnection();
+            connect(s, &QTcpSocket::readyRead, s, [s, &recibido] {
+                recibido += s->readAll();
+                if (!recibido.contains("\r\n\r\n") || !recibido.endsWith('}'))
+                    return;     // falta el cuerpo
+                const QByteArray cuerpo = recibido.startsWith("POST /mal")
+                                              ? QByteArray(R"({"error": "Pedido inválido."})") : QByteArray(R"({"id": "abc"})");
+                s->write((recibido.startsWith("POST /mal") ? "HTTP/1.1 400 Bad Request\r\n" : "HTTP/1.1 201 Created\r\n")
+                         + QByteArray("Content-Type: application/json\r\nContent-Length: ") + QByteArray::number(cuerpo.size())
+                         + "\r\nConnection: close\r\n\r\n" + cuerpo);
+                s->disconnectFromHost();
+            });
+        });
+        const QUrl base(QStringLiteral("http://127.0.0.1:%1/").arg(servidor.serverPort()));
+        int codigo = -1;
+        QByteArray respuesta;
+        http::enviar(this, base.resolved(QUrl(QStringLiteral("bien"))), R"({"urls": ["ñ"]})",
+                     [&](int c, const QByteArray &r) { codigo = c; respuesta = r; });
+        QTRY_COMPARE(codigo, 201);
+        QCOMPARE(respuesta, QByteArray(R"({"id": "abc"})"));
+        QVERIFY(recibido.startsWith("POST /bien"));
+        QVERIFY(recibido.contains("application/json"));
+        QVERIFY(recibido.endsWith(QByteArray(R"({"urls": ["ñ"]})")));
+
+        recibido.clear();
+        codigo = -1;
+        http::enviar(this, base.resolved(QUrl(QStringLiteral("mal"))), "{}", [&](int c, const QByteArray &r) { codigo = c; respuesta = r; });
+        QTRY_COMPARE(codigo, 400);
+        QCOMPARE(QString::fromUtf8(respuesta), QStringLiteral(R"({"error": "Pedido inválido."})"));
+    }
 };
 
 QTEST_MAIN(TstRed)

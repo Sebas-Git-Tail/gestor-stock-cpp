@@ -13,3 +13,4 @@ prueba(tst_red comun_red)
 prueba(tst_descargas comun_descargas)   # el nucleo viene con comun_descargas
 prueba(tst_apps comun_apps_widgets)
 prueba(tst_ui comun_ui)
+prueba(tst_soporte comun_apps_widgets)
