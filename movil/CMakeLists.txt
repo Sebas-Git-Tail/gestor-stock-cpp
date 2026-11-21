@@ -22,6 +22,7 @@ target_link_libraries(gsmovil PUBLIC gsnucleo Qt6::Quick Qt6::QuickControls2 com
 
 qt_add_executable(gestor-stock-movil main.cpp)
 target_link_libraries(gestor-stock-movil PRIVATE gsmovil gsmovilplugin)
+comun_novedades(gestor-stock-movil ${CMAKE_SOURCE_DIR}/NOVEDADES.md)   # qué cambió en cada versión (comun/soporte)
 
 # versionCode sale de la versión (2.2.1 -> 20201): Android solo instala encima si es mayor que el anterior
 math(EXPR GS_VERSION_CODE "${PROJECT_VERSION_MAJOR} * 10000 + ${PROJECT_VERSION_MINOR} * 100 + ${PROJECT_VERSION_PATCH}")

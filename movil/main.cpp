@@ -2,7 +2,9 @@
 #include "controlador.h"
 #include "Traducciones.h"
 #include "db.h"
+#include "Fallas.h"
 #include "ModeloApps.h"
+#include "Novedades.h"
 #include <QGuiApplication>
 #include <QLocale>
 #include <QQmlApplicationEngine>
@@ -22,6 +24,7 @@ int main(int argc, char* argv[])
     QGuiApplication::setApplicationName(QStringLiteral("gestor-stock-movil"));
     QGuiApplication::setApplicationDisplayName(QStringLiteral("Gestor de Stock"));
     QGuiApplication::setApplicationVersion(QStringLiteral(GS_VERSION));
+    soporte::iniciarFallas();       // si se cierra por una falla, manda un informe (comun/soporte)
     QLocale::setDefault(QLocale(QLocale::Spanish, QLocale::Argentina));
     QQuickStyle::setStyle(QStringLiteral("Material"));
 
@@ -37,6 +40,8 @@ int main(int argc, char* argv[])
     QQmlApplicationEngine engine;
     engine.addImportPath(QStringLiteral("qrc:/"));
     if (!stock.abierta()) {
+        soporte::informar(QStringLiteral("base"), stock.errorApertura());
+        soporte::Fallas::instancia().enviarPendientes();
         engine.loadData(QStringLiteral("import QtQuick; import QtQuick.Controls; ApplicationWindow { visible: true; width: 400; height: 300; "
                                        "Label { anchors.fill: parent; anchors.margins: 20; wrapMode: Text.WordWrap; text: %1 } }")
                             .arg(QStringLiteral("\"No se pudo abrir la base de datos: ") + QString(stock.errorApertura()).replace('"', '\'') + "\"")
@@ -49,7 +54,13 @@ int main(int argc, char* argv[])
     // «Apps y actualizaciones» (comun/apps): versión nueva de esta app y las otras para instalar
     auto *modeloApps = new apps::ModeloApps(QStringLiteral("gestor-stock"), &app);   // vive más que el motor de QML
     engine.rootContext()->setContextProperty(QStringLiteral("Apps"), modeloApps);
+    // Qué cambió en cada versión (se muestra sola al abrir una versión nueva) e informe de fallas (comun/soporte)
+    engine.rootContext()->setContextProperty(QStringLiteral("Novedades"), new soporte::Novedades(&app));
     engine.load(QUrl(QStringLiteral("qrc:/GestorStock/qml/Main.qml")));
-    if (engine.rootObjects().isEmpty()) return 1;
+    if (engine.rootObjects().isEmpty()) {
+        // La interfaz no cargó (falla de QML): se informa y recién después se sale
+        soporte::Fallas::instancia().informarYSalir(QStringLiteral("qml"), QStringLiteral("No se pudo cargar Main.qml"), 1);
+        return app.exec();
+    }
     return app.exec();
 }

@@ -19,4 +19,5 @@ target_compile_options(gsescritorio PRIVATE -Wall -Wextra)
 
 add_executable(gestor-stock main.cpp)
 target_link_libraries(gestor-stock PRIVATE gsescritorio)
+comun_novedades(gestor-stock ${CMAKE_SOURCE_DIR}/NOVEDADES.md)   # qué cambió en cada versión (comun/soporte)
 target_compile_options(gestor-stock PRIVATE -Wall -Wextra)

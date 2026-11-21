@@ -1,4 +1,6 @@
+#include "Fallas.h"
 #include "PanelApps.h"
+#include "VentanaNovedades.h"
 #include "Tema.h"
 #include "Traducciones.h"
 #include "db.h"
@@ -23,6 +25,7 @@ int main(int argc, char* argv[])
     QApplication::setDesktopFileName(QStringLiteral("gestor-stock"));      // lo une con gestor-stock.desktop en Plasma
     tema::aplicar(app, QColor(0x3a, 0xa7, 0x6d));   // tema común (claro u oscuro) con el verde del gestor (comun/ui)
     QApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("Logo")));
+    soporte::iniciarFallas();       // si se cierra por una falla, manda un informe (comun/soporte)
 
     // Botones estándar (Aceptar, Cancelar, Sí, No...) en el idioma del sistema, si está instalado qt6-translations
     QTranslator traductorQt;
@@ -34,6 +37,8 @@ int main(int argc, char* argv[])
     const QString ruta = args.size() > 1 ? args.at(1) : Stock::rutaPorDefecto();
     Stock stock(ruta);
     if (!stock.abierta()) {
+        soporte::informar(QStringLiteral("base"), stock.errorApertura());
+        soporte::Fallas::instancia().enviarPendientes();      // se manda mientras se ve el mensaje
         QMessageBox::critical(nullptr, QObject::tr("No se pudo abrir la base de datos"), stock.errorApertura());
         return 1;
     }
@@ -44,7 +49,9 @@ int main(int argc, char* argv[])
     ventana.show();
     // Una vez por día: si hay una versión nueva, pregunta y la instala (pkexec pacman -U). Acá y no en la
     // ventana, para que las pruebas (que crean la ventana) no salgan a internet.
-    if (args.size() <= 1)
+    if (args.size() <= 1) {
         apps::avisarActualizaciones(&ventana, QStringLiteral("gestor-stock"));
+        soporte::novedadesAlAbrir(&ventana);    // la primera vez que se abre una versión nueva: qué cambió
+    }
     return app.exec();
 }

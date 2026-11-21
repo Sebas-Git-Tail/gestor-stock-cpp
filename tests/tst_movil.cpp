@@ -5,6 +5,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include "ModeloApps.h"
+#include "Novedades.h"
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QStandardPaths>
@@ -95,6 +96,8 @@ private slots:
         qputenv("COMUN_APPS_SIN_RED", "1");
         apps::ModeloApps modeloApps(QStringLiteral("gestor-stock"));
         engine.rootContext()->setContextProperty(QStringLiteral("Apps"), &modeloApps);
+        soporte::Novedades novedades;   // «Novedades» (comun/soporte): el diálogo de lo nuevo y el informe de fallas
+        engine.rootContext()->setContextProperty(QStringLiteral("Novedades"), &novedades);
         connect(&engine, &QQmlEngine::warnings, this, [&](const QList<QQmlError>& l) { for (const auto& e : l) advertencias << e.toString(); });
         engine.addImportPath("qrc:/");
         engine.load(QUrl("qrc:/GestorStock/qml/Main.qml"));
