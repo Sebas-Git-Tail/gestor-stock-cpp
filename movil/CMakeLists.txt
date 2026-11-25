@@ -34,5 +34,8 @@ set_target_properties(gestor-stock-movil PROPERTIES
     QT_ANDROID_APP_ICON "@mipmap/ic_launcher"
     QT_ANDROID_VERSION_NAME "${PROJECT_VERSION}"
     QT_ANDROID_VERSION_CODE ${GS_VERSION_CODE}
+    # mínimo Android 11, como las otras apps (el celular que la usa tiene Android 16); objetivo = el de Qt 6.10
+    QT_ANDROID_MIN_SDK_VERSION 30
+    QT_ANDROID_TARGET_SDK_VERSION 35
     QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android"
 )

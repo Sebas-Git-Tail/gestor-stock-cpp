@@ -3,6 +3,9 @@
 Lo que cambió en cada versión (la PC y el celular). La app lo muestra la primera vez que se abre una versión
 nueva y siempre desde «Novedades» en el menú. Los cambios marcados [Sebastián] solo aparecen en sus equipos.
 
+## 2.9.1 (25/11/2026)
+- Celular: ahora necesita Android 11 o más nuevo, como las otras apps. No cambia nada más.
+
 ## 2.9.0 (21/11/2026)
 - Novedades: la primera vez que abrís una versión nueva te cuenta qué cambió. Siempre están en el menú, en
   «Novedades».
