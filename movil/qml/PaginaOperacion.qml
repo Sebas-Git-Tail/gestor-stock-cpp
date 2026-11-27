@@ -11,14 +11,27 @@ Page {
     property var lineas: []                          // [{id, nombre, stock, cantidad, presentacion, precio, presets}]
     property var resultados: []
     property string codigoPendiente: ""              // código escaneado sin producto: se está creando
-    property string descuento: ""                    // solo en la venta, opcional (en pesos)
+    // Solo en la venta, opcionales: descuento (se resta) y recargo (se suma), en pesos o en % del subtotal
+    property string descuento: ""
+    property bool descuentoPorcentaje: false
+    property string recargo: ""
+    property bool recargoPorcentaje: false
 
     function numero(t) {                             // «1.234,5» o «1234.5» -> número
-        const s = String(t).replace(/\s|\$/g, "")
+        const s = String(t).replace(/\s|\$|%/g, "")
         return parseFloat(s.indexOf(",") >= 0 ? s.replace(/\./g, "").replace(",", ".") : (/^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, "") : s)) || 0
     }
-    readonly property real subtotal: { let t = 0; for (const l of lineas) t += l.cantidad * numero(l.precio); return t }
-    readonly property real total: venta ? subtotal - numero(descuento) : subtotal
+    function enPesos(t, porcentaje) {                // como montoEnPesos del núcleo: el % va sobre el subtotal
+        return Math.round((porcentaje ? subtotal * numero(t) / 100 : numero(t)) * 100) / 100
+    }
+    readonly property real subtotal: { let t = 0; for (const l of lineas) t += l.cantidad * numero(l.precio); return Math.round(t * 100) / 100 }
+    readonly property real montoDescuento: venta ? enPesos(descuento, descuentoPorcentaje) : 0
+    readonly property real montoRecargo: venta ? enPesos(recargo, recargoPorcentaje) : 0
+    readonly property real total: Math.round((subtotal - montoDescuento + montoRecargo) * 100) / 100
+    // Lo que el núcleo rechazaría: se avisa antes y no se deja confirmar
+    readonly property string problemaAjustes: !venta ? ""
+        : descuentoPorcentaje && numero(descuento) > 100 ? "El descuento no puede ser de más del 100 %"
+        : total < 0 ? "El descuento es mayor que el total" : ""
 
     function agregar(p) {
         const ls = lineas.slice()
@@ -33,7 +46,9 @@ Page {
     }
     function confirmar() {
         const r = App.registrarOperacion(venta, lineas.map(l => ({ id: l.id, cantidad: l.cantidad, presentacion: l.presentacion, precio: l.precio })),
-                                         { medioPago: campoMedio.editText, cliente: campoCliente.text, descuento: pagina.descuento })
+                                         { medioPago: campoMedio.editText, cliente: campoCliente.text,
+                                           descuento: pagina.descuento, descuentoPorcentaje: pagina.descuentoPorcentaje,
+                                           recargo: pagina.recargo, recargoPorcentaje: pagina.recargoPorcentaje })
         if (r.ok) { ventana.avisar(venta ? "Venta registrada: " + r.total : "Compra registrada: el stock ya está actualizado"); pila.pop() }
         else error.text = r.error
     }
@@ -148,7 +163,7 @@ Page {
             }
             Label { anchors.centerIn: parent; visible: listaLineas.count === 0; color: ventana.tintaApagada; text: "Buscá los productos arriba para agregarlos." }
         }
-        // Venta: medio de pago, cliente y descuento (todo opcional)
+        // Venta: medio de pago, cliente, descuento y recargo (todo opcional)
         GridLayout {
             visible: pagina.venta
             Layout.fillWidth: true
@@ -157,30 +172,86 @@ Page {
             ComboBox {
                 id: campoMedio
                 Layout.fillWidth: true
+                Layout.preferredWidth: 1
                 editable: true
                 model: [""].concat(App.mediosDePago)
-                displayText: editText === "" ? "Medio de pago (opcional)" : editText
                 Accessible.name: "Medio de pago"
-            }
-            TextField {
-                implicitWidth: 120
-                placeholderText: "Descuento $"
-                text: pagina.descuento
-                inputMethodHints: Qt.ImhFormattedNumbersOnly
-                onTextEdited: pagina.descuento = text
+                // Editable, el combo muestra su campo de texto y no displayText: la guía va encima, como un placeholder
+                Label {
+                    x: campoMedio.contentItem.x + campoMedio.contentItem.leftPadding
+                    width: campoMedio.availableWidth - campoMedio.contentItem.leftPadding
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Medio de pago"
+                    font: campoMedio.contentItem.font
+                    color: ventana.tintaApagada
+                    elide: Text.ElideRight
+                    visible: campoMedio.editText === "" && !campoMedio.contentItem.activeFocus
+                }
             }
             TextField {
                 id: campoCliente
                 Layout.fillWidth: true
-                Layout.columnSpan: 2
+                Layout.preferredWidth: 1
                 placeholderText: "Cliente (opcional)"
+            }
+            // Descuento y recargo: el número y si va en pesos o en %
+            Repeater {
+                model: [{ nombre: "Descuento", clave: "descuento" }, { nombre: "Recargo", clave: "recargo" }]
+                RowLayout {
+                    id: ajuste
+                    required property var modelData
+                    readonly property bool porcentaje: pagina[modelData.clave + "Porcentaje"]
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    spacing: 0
+                    TextField {
+                        Layout.fillWidth: true
+                        placeholderText: ajuste.modelData.nombre      // si va en $ o en % lo dicen los botones de al lado
+                        text: pagina[ajuste.modelData.clave]
+                        inputMethodHints: Qt.ImhFormattedNumbersOnly
+                        onTextEdited: {
+                            pagina[ajuste.modelData.clave] = text
+                            if (text.indexOf("%") >= 0) pagina[ajuste.modelData.clave + "Porcentaje"] = true   // «10%» es un 10 %
+                        }
+                        Accessible.name: ajuste.modelData.nombre
+                    }
+                    Repeater {
+                        model: ["$", "%"]
+                        ToolButton {
+                            required property string modelData
+                            required property int index
+                            // Sin checkable: tocar el ya elegido lo destildaría y rompería el binding
+                            readonly property bool elegido: ajuste.porcentaje === (index === 1)
+                            implicitWidth: 32
+                            text: modelData
+                            font.bold: elegido
+                            onClicked: pagina[ajuste.modelData.clave + "Porcentaje"] = index === 1
+                            Material.foreground: elegido ? Material.accent : ventana.tintaApagada
+                            Accessible.name: ajuste.modelData.nombre + (index === 1 ? " en porcentaje" : " en pesos")
+                        }
+                    }
+                }
             }
         }
         Label { id: error; Layout.fillWidth: true; color: "#e34948"; wrapMode: Text.WordWrap; visible: text !== "" }
+        // La cuenta (si hay descuento o recargo) en chico, y el total grande en un solo renglón
+        Label {
+            visible: pagina.venta && (pagina.montoDescuento > 0 || pagina.montoRecargo > 0)
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            color: ventana.tintaApagada
+            text: "Subtotal " + App.precioTexto(pagina.subtotal)
+                  + (pagina.montoDescuento > 0 ? " − descuento " + App.precioTexto(pagina.montoDescuento) : "")
+                  + (pagina.montoRecargo > 0 ? " + recargo " + App.precioTexto(pagina.montoRecargo) : "")
+        }
         Label {
             visible: pagina.venta || pagina.total > 0
-            text: (pagina.venta ? (pagina.numero(pagina.descuento) > 0 ? App.precioTexto(pagina.subtotal) + " − " + App.precioTexto(pagina.numero(pagina.descuento)) + " = Total: " : "Total: ")
-                                : "Total de la compra: ") + App.precioTexto(pagina.total)
+            text: !pagina.venta ? "Total de la compra: " + App.precioTexto(pagina.total)
+                  : pagina.problemaAjustes !== "" ? pagina.problemaAjustes
+                  : "Total: " + App.precioTexto(pagina.total)
+            color: pagina.problemaAjustes !== "" ? "#e34948" : Material.foreground
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
             font.pixelSize: 22; font.bold: true
         }
         Label {
@@ -195,7 +266,7 @@ Page {
             Layout.fillWidth: true
             text: pagina.venta ? "Confirmar venta" : "Confirmar compra"
             highlighted: true
-            enabled: pagina.lineas.length > 0
+            enabled: pagina.lineas.length > 0 && pagina.problemaAjustes === ""
             onClicked: pagina.confirmar()
         }
     }

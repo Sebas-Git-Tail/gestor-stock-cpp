@@ -200,6 +200,31 @@ private slots:
         QCOMPARE(r.value("masVendidos").toList().size(), 1);
     }
 
+    // ---------------------------------------------------------------- 2.11.0
+    void ventaConRecargoYPorcentaje()
+    {
+        Stock s(":memory:");
+        Controlador c(s);
+        QVariantMap p = c.producto(0);
+        p["nombre"] = "Avena"; p["cantidad"] = "10"; p["codigo"] = "779123";
+        QCOMPARE(c.guardarProducto(p), QString());
+        const QVariantList linea{QVariantMap{{"id", c.idPorCodigo("779123")}, {"cantidad", 2}, {"precio", "1000"}}};
+        QVERIFY(!c.registrarOperacion(true, linea, {{"recargo", "algo"}}).value("ok").toBool());
+        QVERIFY(!c.registrarOperacion(true, linea, {{"descuento", "150"}, {"descuentoPorcentaje", true}}).value("ok").toBool());
+        // 2000 − 15 % (300) + 10 % (200) = 1900; acepta «15 %» con el signo
+        const QVariantMap v = c.registrarOperacion(true, linea, {{"descuento", "15 %"}, {"descuentoPorcentaje", true},
+                                                                 {"recargo", "10"}, {"recargoPorcentaje", true}});
+        QVERIFY2(v.value("ok").toBool(), qPrintable(v.value("error").toString()));
+        QCOMPARE(v.value("total").toString(), formatearPrecio(1900));
+        const QVariantList items = c.historial(1, "", "", true).first().toMap().value("items").toList();
+        QCOMPARE(items.size(), 3);                                                   // el producto, el descuento y el recargo
+        QCOMPARE(items.at(2).toMap().value("subtotal").toString(), QStringLiteral("+ ") + formatearPrecio(200));
+        // «10%» con «$» elegido es un 10 % (no $ 10): 2000 − 200 = 1800
+        const QVariantMap v2 = c.registrarOperacion(true, linea, {{"descuento", "10%"}, {"descuentoPorcentaje", false}});
+        QVERIFY2(v2.value("ok").toBool(), qPrintable(v2.value("error").toString()));
+        QCOMPARE(v2.value("total").toString(), formatearPrecio(1800));
+    }
+
     // ---------------------------------------------------------------- 2.10.0
     void historialAnularDeshacerYArchivos()
     {

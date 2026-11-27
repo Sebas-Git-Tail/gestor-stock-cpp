@@ -29,10 +29,13 @@ ResultadoOperacion Stock::registrarOperacion(TipoOperacion tipo, const QList<Lin
         }
     }
     const bool venta = tipo == TipoOperacion::Venta;
-    const DatosVenta extra = venta ? datos : DatosVenta{};     // las compras no llevan medio de pago, cliente ni descuento
-    const double descuento = aCentavos(extra.descuento);
-    if (descuento < 0) {
-        r.error = QStringLiteral("El descuento no puede ser negativo.");
+    const DatosVenta extra = venta ? datos : DatosVenta{};     // las compras no llevan medio de pago, cliente, descuento ni recargo
+    if (extra.descuento < 0 || extra.recargo < 0) {
+        r.error = extra.descuento < 0 ? QStringLiteral("El descuento no puede ser negativo.") : QStringLiteral("El recargo no puede ser negativo.");
+        return r;
+    }
+    if (extra.descuentoEnPorcentaje && extra.descuento > 100) {
+        r.error = QStringLiteral("El descuento no puede ser de más del 100 %.");
         return r;
     }
     try {
@@ -59,15 +62,20 @@ ResultadoOperacion Stock::registrarOperacion(TipoOperacion tipo, const QList<Lin
             anotadas.append({l, q.value(0).toString(), nombre});
         }
         total = aCentavos(total);
-        if (descuento > total) {
-            r.error = QStringLiteral("El descuento (%1) no puede ser mayor que el total (%2).").arg(formatearPrecio(descuento), formatearPrecio(total));
+        // Los porcentajes, sobre el subtotal; se guardan en pesos
+        const double descuento = montoEnPesos(extra.descuento, extra.descuentoEnPorcentaje, total);
+        const double recargo = montoEnPesos(extra.recargo, extra.recargoEnPorcentaje, total);
+        if (descuento > total + recargo) {
+            r.error = QStringLiteral("El descuento (%1) no puede ser mayor que el total (%2).")
+                          .arg(formatearPrecio(descuento), formatearPrecio(aCentavos(total + recargo)));
             return r;
         }
-        total = aCentavos(total - descuento);
+        total = aCentavos(total - descuento + recargo);
 
-        QSqlQuery op = consulta(db_, "INSERT INTO operaciones (uuid, tipo, fecha, total, medio_pago, cliente, descuento) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        QSqlQuery op = consulta(db_, "INSERT INTO operaciones (uuid, tipo, fecha, total, medio_pago, cliente, descuento, recargo) "
+                                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                                 {uuidNuevo(), venta ? "venta" : "compra", QDateTime::currentDateTime().toString(Qt::ISODate), total,
-                                 texto(extra.medioPago.simplified()), texto(extra.cliente.simplified()), descuento});
+                                 texto(extra.medioPago.simplified()), texto(extra.cliente.simplified()), descuento, recargo});
         const qint64 idOperacion = op.lastInsertId().toLongLong();
         marcar("operaciones", idOperacion);
         QSet<QString> tocados;
@@ -102,7 +110,8 @@ QList<Operacion> Stock::operaciones(const FiltroOperaciones& f) const
 {
     QList<Operacion> lista;
     try {
-        QString sql = QStringLiteral("SELECT id, uuid, tipo, fecha, total, anulada, medio_pago, cliente, descuento FROM operaciones WHERE 1 = 1 ");
+        QString sql = QStringLiteral("SELECT id, uuid, tipo, fecha, total, anulada, medio_pago, cliente, descuento, recargo "
+                                     "FROM operaciones WHERE 1 = 1 ");
         QVariantList params;
         if (f.tipo) {
             sql += QStringLiteral("AND tipo = ? ");
@@ -126,6 +135,7 @@ QList<Operacion> Stock::operaciones(const FiltroOperaciones& f) const
             o.medioPago = q.value(6).toString();
             o.cliente = q.value(7).toString();
             o.descuento = q.value(8).toDouble();
+            o.recargo = q.value(9).toDouble();
             lista.append(o);
         }
         for (Operacion& o : lista) {
@@ -268,11 +278,12 @@ Reporte Stock::reporte(const QDate& desde, const QDate& hasta) const
         // El costo sale de la «Ganancia %» del producto si la tiene (precio = costo + %), si no del promedio de las compras
         const QHash<QString, double> costos = costosPromedio(db_);
         const QHash<QString, double> porcentajes = porcentajesGanancia(db_);
-        // Si la venta tuvo descuento, el importe de cada producto se achica en la misma proporción
+        // Si la venta tuvo descuento o recargo, el importe de cada producto se achica o se agranda en la misma
+        // proporción (total / subtotal, con subtotal = total + descuento − recargo)
         QSqlQuery items = consulta(db_,
             "SELECT i.producto_uuid, MAX(i.nombre), SUM(i.cantidad), "
-            "SUM(i.cantidad * i.precio_unitario * CASE WHEN o.descuento > 0 AND o.total + o.descuento > 0 "
-            "THEN o.total / (o.total + o.descuento) ELSE 1 END) FROM operacion_items i "
+            "SUM(i.cantidad * i.precio_unitario * CASE WHEN (o.descuento > 0 OR o.recargo > 0) AND o.total + o.descuento - o.recargo > 0 "
+            "THEN o.total / (o.total + o.descuento - o.recargo) ELSE 1 END) FROM operacion_items i "
             "JOIN operaciones o ON o.id = i.operacion_id WHERE o.tipo = 'venta' AND o.anulada = '' "
             "AND substr(o.fecha, 1, 10) BETWEEN ? AND ? GROUP BY i.producto_uuid", {d, h});
         while (items.next()) {

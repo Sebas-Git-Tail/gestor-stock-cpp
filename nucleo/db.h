@@ -81,7 +81,7 @@ public:
     Resultado ajustar(qint64 id, int delta);         // lo mismo, sumando o restando
 
     // ---- ventas y compras: todo o nada
-    // datos: medio de pago, cliente y descuento (solo en las ventas; en las compras se ignoran)
+    // datos: medio de pago, cliente, descuento y recargo (solo en las ventas; en las compras se ignoran)
     ResultadoOperacion registrarOperacion(TipoOperacion tipo, const QList<LineaOperacion>& lineas, const DatosVenta& datos = {});
     QList<Operacion> operaciones(int limite = 100) const;                    // las últimas, de la más nueva a la más vieja
     QList<Operacion> operaciones(const FiltroOperaciones& filtro) const;     // historial: por tipo y fechas

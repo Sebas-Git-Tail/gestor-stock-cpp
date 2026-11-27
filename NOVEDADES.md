@@ -3,6 +3,18 @@
 Lo que cambió en cada versión (la PC y el celular). La app lo muestra la primera vez que se abre una versión
 nueva y siempre desde «Novedades» en el menú. Los cambios marcados [Sebastián] solo aparecen en sus equipos.
 
+## 2.11.0 (27/11/2026)
+- En la venta, además del descuento, se puede cargar un recargo (por ejemplo, por pagar con tarjeta).
+- El descuento y el recargo se pueden poner en pesos o en porcentaje. El porcentaje se calcula sobre el subtotal
+  y la cuenta se ve antes de confirmar.
+- El historial muestra el recargo de cada venta, y los reportes lo tienen en cuenta.
+- Celular: si el descuento es mayor que el total, lo avisa y no deja confirmar.
+- Actualizá la PC y el celular juntos: con una versión anterior el total de la venta queda bien, pero no se ve
+  el recargo y los reportes por producto salen mal en las ventas que lo tienen.
+- [Sebastián] Columna nueva operaciones.recargo (ALTER TABLE, user_version sigue en 4) y campo opcional «rec» en
+  «op». Los porcentajes se pasan a pesos al registrar (montoEnPesos en modelos.h); reportes: factor
+  total / (total + descuento − recargo).
+
 ## 2.10.0 (26/11/2026)
 - Historial de ventas y compras (botón «Historial» en la PC, en el menú del celular): cada una con su fecha y lo
   que llevó; se puede filtrar por ventas o compras y por fechas.

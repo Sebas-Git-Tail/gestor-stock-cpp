@@ -88,7 +88,8 @@ public:
     Q_INVOKABLE QString restaurarColumna(qint64 id);
 
     // ---- ventas y compras: lineas = [{id, cantidad, presentacion, precio}] -> {ok, error, total}
-    // compra: "precio" = costo c/u (opcional). datos (solo venta, opcional): {medioPago, cliente, descuento}
+    // compra: "precio" = costo c/u (opcional). datos (solo venta, opcional): {medioPago, cliente, descuento,
+    //   descuentoPorcentaje, recargo, recargoPorcentaje} (los «Porcentaje» en true: el valor es % del subtotal)
     Q_INVOKABLE QVariantMap registrarOperacion(bool venta, const QVariantList& lineas, const QVariantMap& datos = {});
     // ---- historial. tipo: 0 todas, 1 ventas, 2 compras; fechas "AAAA-MM-DD" (vacías = sin límite)
     Q_INVOKABLE QVariantList historial(int tipo, const QString& desde, const QString& hasta, bool conAnuladas) const;

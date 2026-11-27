@@ -325,9 +325,18 @@ QVariantMap Controlador::registrarOperacion(bool venta, const QVariantList& line
     if (venta) {
         extra.medioPago = datos.value(QStringLiteral("medioPago")).toString().simplified();
         extra.cliente = datos.value(QStringLiteral("cliente")).toString().simplified();
-        const QString d = datos.value(QStringLiteral("descuento")).toString().trimmed();
+        // Descuento y recargo: en pesos, o en % del subtotal si viene descuentoPorcentaje / recargoPorcentaje
+        // o si el número trae «%» (escribir «10%» con «$» elegido es un 10 %, no $ 10)
+        const QString dt = datos.value(QStringLiteral("descuento")).toString();
+        const QString d = QString(dt).remove(QLatin1Char('%')).trimmed();
         if (!d.isEmpty() && !parsearPrecio(d, &extra.descuento))
             return QVariantMap{{"ok", false}, {"error", QStringLiteral("El descuento «%1» no es un número válido.").arg(d)}};
+        extra.descuentoEnPorcentaje = datos.value(QStringLiteral("descuentoPorcentaje")).toBool() || dt.contains(QLatin1Char('%'));
+        const QString rt = datos.value(QStringLiteral("recargo")).toString();
+        const QString rc = QString(rt).remove(QLatin1Char('%')).trimmed();
+        if (!rc.isEmpty() && !parsearPrecio(rc, &extra.recargo))
+            return QVariantMap{{"ok", false}, {"error", QStringLiteral("El recargo «%1» no es un número válido.").arg(rc)}};
+        extra.recargoEnPorcentaje = datos.value(QStringLiteral("recargoPorcentaje")).toBool() || rt.contains(QLatin1Char('%'));
     }
     QList<LineaOperacion> ls;
     for (const QVariant& v : lineas) {
@@ -376,6 +385,7 @@ QVariantList Controlador::historial(int tipo, const QString& desde, const QStrin
                                  {"subtotal", i.precioUnitario > 0 ? formatearPrecio(i.cantidad * i.precioUnitario) : QString()}};
         }
         if (o.descuento > 0) items << QVariantMap{{"texto", QStringLiteral("Descuento")}, {"subtotal", QStringLiteral("− ") + formatearPrecio(o.descuento)}};
+        if (o.recargo > 0) items << QVariantMap{{"texto", QStringLiteral("Recargo")}, {"subtotal", QStringLiteral("+ ") + formatearPrecio(o.recargo)}};
         QStringList datos;
         if (!o.cliente.isEmpty()) datos << QStringLiteral("Cliente: %1").arg(o.cliente);
         if (!o.medioPago.isEmpty()) datos << o.medioPago;

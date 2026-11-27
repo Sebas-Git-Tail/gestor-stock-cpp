@@ -483,6 +483,23 @@ private slots:
         QCOMPARE(porNombre(e.cel, "Avena").cantidad, 10);
     }
 
+    void recargoViajaEnPesos()
+    {
+        Escenario e;
+        e.pc.crear(producto("Avena", 10, {}, {{"", 100}}));
+        QVERIFY(e.emparejar());
+        DatosVenta d;
+        d.descuento = 10; d.descuentoEnPorcentaje = true;            // 10 % de 400 = 40
+        d.recargo = 25;
+        QVERIFY(e.cel.registrarOperacion(TipoOperacion::Venta, {{idDe(e.cel, "Avena"), 4, QString(), 100}}, d).ok);
+        QVERIFY(e.sincronizar().ok);
+        const Operacion enPc = e.pc.operaciones().first();
+        QCOMPARE(enPc.descuento, 40.0);
+        QCOMPARE(enPc.recargo, 25.0);
+        QCOMPARE(enPc.total, 385.0);
+        QCOMPARE(porNombre(e.pc, "Avena").cantidad, 6);
+    }
+
     void anularEnLosDosLadosDevuelveElStockUnaSolaVez()
     {
         Escenario e;

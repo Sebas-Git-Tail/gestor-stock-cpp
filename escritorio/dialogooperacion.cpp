@@ -88,13 +88,28 @@ DialogoOperacion::DialogoOperacion(TipoOperacion tipo, const QList<Producto>& pr
     connect(ui->inputBuscarProducto, &QLineEdit::returnPressed, this, &DialogoOperacion::agregarDesdeBuscador);
     connect(ui->btnQuitarLinea, &QPushButton::clicked, this, &DialogoOperacion::quitarLinea);
 
-    // Venta: medio de pago, cliente y descuento, todo opcional
+    // Venta: medio de pago, cliente, descuento y recargo, todo opcional. Descuento y recargo, en pesos o en %
     ui->comboMedioPago->addItem(QString());
     ui->comboMedioPago->addItems(mediosDePago());
     ui->comboMedioPago->lineEdit()->setPlaceholderText(tr("(opcional)"));
-    connect(ui->spinDescuento, &QDoubleSpinBox::valueChanged, this, [this](double) { recalcular(); });
+    for (auto [spin, combo] : {std::pair{ui->spinDescuento, ui->comboTipoDescuento}, std::pair{ui->spinRecargo, ui->comboTipoRecargo}}) {
+        combo->addItems({tr("en pesos"), tr("en %")});
+        connect(spin, &QDoubleSpinBox::valueChanged, this, [this](double) { recalcular(); });
+        connect(combo, &QComboBox::currentIndexChanged, this, [this, spin, combo](int) {
+            const bool porcentaje = combo->currentIndex() == 1;
+            spin->setPrefix(porcentaje ? QString() : QStringLiteral("$ "));
+            spin->setSuffix(porcentaje ? QStringLiteral(" %") : QString());
+            // Un descuento de más del 100 % no tiene sentido; un recargo sí puede pasarlo. Si ya había más de 100
+            // (eran pesos), se vacía: si no, setMaximum lo dejaba en 100 % sin avisar y la venta quedaba en $ 0
+            const bool tope = porcentaje && spin == ui->spinDescuento;
+            if (tope && spin->value() > 100) spin->setValue(0);
+            spin->setMaximum(tope ? 100 : 1000000000);
+            recalcular();
+        });
+    }
     for (QWidget* w : std::initializer_list<QWidget*>{ui->labelMedioPago, ui->comboMedioPago, ui->labelCliente, ui->inputCliente,
-                                                     ui->labelDescuento, ui->spinDescuento})
+                                                     ui->labelDescuento, ui->spinDescuento, ui->comboTipoDescuento,
+                                                     ui->labelRecargo, ui->spinRecargo, ui->comboTipoRecargo})
         w->setVisible(venta_);
 
     for (qint64 id : preseleccion) agregarProducto(id);
@@ -252,16 +267,24 @@ void DialogoOperacion::recalcular()
         if (sinStock) todoBien = false;
     }
     total = std::round(total * 100.0) / 100.0;
-    const double descuento = venta_ ? ui->spinDescuento->value() : 0;
-    if (descuento > total) todoBien = false;      // no puede quedar negativo
-    if (!venta_)
+    if (!venta_) {
         ui->labelTotal->setText(tr("Total de la compra: %1").arg(formatearPrecio(total)));
-    else if (descuento > 0)
-        ui->labelTotal->setText(tr("%1 − descuento %2 = Total: %3").arg(formatearPrecio(total), formatearPrecio(descuento),
-                                                                       descuento > total ? tr("(el descuento es mayor)")
-                                                                                         : formatearPrecio(total - descuento)));
-    else
-        ui->labelTotal->setText(tr("Total: %1").arg(formatearPrecio(total)));
+    } else {
+        const DatosVenta d = datosVenta();
+        const double descuento = montoEnPesos(d.descuento, d.descuentoEnPorcentaje, total);
+        const double recargo = montoEnPesos(d.recargo, d.recargoEnPorcentaje, total);
+        QString texto = formatearPrecio(total);
+        if (descuento > 0) texto += tr(" − descuento %1").arg(formatearPrecio(descuento));
+        if (recargo > 0) texto += tr(" + recargo %1").arg(formatearPrecio(recargo));
+        if (descuento > total + recargo) {
+            todoBien = false;                     // no puede quedar negativo
+            texto += tr(" = Total: (el descuento es mayor)");
+        } else {
+            const QString totalFinal = formatearPrecio(std::round((total - descuento + recargo) * 100.0) / 100.0);
+            texto = descuento > 0 || recargo > 0 ? texto + tr(" = Total: %1").arg(totalFinal) : tr("Total: %1").arg(totalFinal);
+        }
+        ui->labelTotal->setText(texto);
+    }
     ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(todoBien);
 }
 
@@ -269,21 +292,36 @@ double DialogoOperacion::total() const
 {
     double total = 0;
     for (int f = 0; f < ui->tablaLineas->rowCount(); ++f) total += spinCantidad(f)->value() * spinPrecio(f)->value();
-    if (venta_) total -= ui->spinDescuento->value();
+    total = std::round(total * 100.0) / 100.0;
+    if (venta_) {
+        const DatosVenta d = datosVenta();
+        total = total - montoEnPesos(d.descuento, d.descuentoEnPorcentaje, total) + montoEnPesos(d.recargo, d.recargoEnPorcentaje, total);
+    }
     return std::round(total * 100.0) / 100.0;
 }
 
 DatosVenta DialogoOperacion::datosVenta() const
 {
     if (!venta_) return {};
-    return {ui->comboMedioPago->currentText().simplified(), ui->inputCliente->text().simplified(), ui->spinDescuento->value()};
+    DatosVenta d;
+    d.medioPago = ui->comboMedioPago->currentText().simplified();
+    d.cliente = ui->inputCliente->text().simplified();
+    d.descuento = ui->spinDescuento->value();
+    d.descuentoEnPorcentaje = ui->comboTipoDescuento->currentIndex() == 1;
+    d.recargo = ui->spinRecargo->value();
+    d.recargoEnPorcentaje = ui->comboTipoRecargo->currentIndex() == 1;
+    return d;
 }
 
 void DialogoOperacion::fijarDatosVenta(const DatosVenta& d)
 {
     ui->comboMedioPago->setCurrentText(d.medioPago);
     ui->inputCliente->setText(d.cliente);
+    // Primero el tipo: cambia el máximo del spin (100 en el descuento en %)
+    ui->comboTipoDescuento->setCurrentIndex(d.descuentoEnPorcentaje ? 1 : 0);
     ui->spinDescuento->setValue(d.descuento);
+    ui->comboTipoRecargo->setCurrentIndex(d.recargoEnPorcentaje ? 1 : 0);
+    ui->spinRecargo->setValue(d.recargo);
 }
 
 QList<LineaOperacion> DialogoOperacion::lineas() const

@@ -10,6 +10,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTreeWidget>
+#include <tuple>
 
 namespace {
 enum ColumnaArbol { ColFecha, ColTipo, ColDetalle, ColTotal, ColEstado };
@@ -132,10 +133,12 @@ void DialogoHistorial::cargar()
             if (i.precioUnitario > 0) hijo->setText(ColTotal, formatearPrecio(i.cantidad * i.precioUnitario));
             hijo->setTextAlignment(ColTotal, Qt::AlignRight | Qt::AlignVCenter);
         }
-        if (o.descuento > 0) {
+        for (const auto& [nombre, monto, signo] : {std::tuple{tr("Descuento"), o.descuento, QStringLiteral("− ")},
+                                                   std::tuple{tr("Recargo"), o.recargo, QStringLiteral("+ ")}}) {
+            if (monto <= 0) continue;
             auto* hijo = new QTreeWidgetItem(fila);
-            hijo->setText(ColDetalle, tr("Descuento"));
-            hijo->setText(ColTotal, QStringLiteral("− ") + formatearPrecio(o.descuento));
+            hijo->setText(ColDetalle, nombre);
+            hijo->setText(ColTotal, signo + formatearPrecio(monto));
             hijo->setTextAlignment(ColTotal, Qt::AlignRight | Qt::AlignVCenter);
         }
         if (o.id == elegido) ui->arbol->setCurrentItem(fila);

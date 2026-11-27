@@ -149,6 +149,10 @@
        </property>
       </widget>
      </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="layoutAjustes">
      <item>
       <widget class="QLabel" name="labelDescuento">
        <property name="text">
@@ -167,10 +171,88 @@
        <property name="maximum">
         <double>1000000000.000000000000000</double>
        </property>
+       <property name="minimumSize">
+        <size>
+         <width>130</width>
+         <height>0</height>
+        </size>
+       </property>
        <property name="toolTip">
-        <string>Opcional: cuántos pesos se le descuentan al total</string>
+        <string>Opcional: se resta del total (en pesos o en porcentaje)</string>
        </property>
       </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="comboTipoDescuento">
+       <property name="toolTip">
+        <string>El descuento, en pesos o en porcentaje del subtotal</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="espacioAjustes">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeType">
+        <enum>QSizePolicy::Fixed</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>24</width>
+         <height>0</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QLabel" name="labelRecargo">
+       <property name="text">
+        <string>Recargo:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDoubleSpinBox" name="spinRecargo">
+       <property name="prefix">
+        <string>$ </string>
+       </property>
+       <property name="decimals">
+        <number>2</number>
+       </property>
+       <property name="maximum">
+        <double>1000000000.000000000000000</double>
+       </property>
+       <property name="minimumSize">
+        <size>
+         <width>130</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Opcional: se suma al total (en pesos o en porcentaje), por ejemplo por pagar con tarjeta</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="comboTipoRecargo">
+       <property name="toolTip">
+        <string>El recargo, en pesos o en porcentaje del subtotal</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="espacioAjustesFin">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+      </spacer>
      </item>
     </layout>
    </item>

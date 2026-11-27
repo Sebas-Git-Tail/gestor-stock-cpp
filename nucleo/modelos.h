@@ -5,6 +5,7 @@
 #include <QList>
 #include <QString>
 #include <QStringList>
+#include <cmath>
 #include <optional>
 
 struct Precio {
@@ -131,13 +132,24 @@ struct ItemOperacion {
     QString productoUuid;
 };
 
-// Lo opcional de una venta (2.10.0): medio de pago, cliente y descuento. Viajan al sincronizar como campos
-// de más de cada venta, que las versiones anteriores ignoran (ver Stock::jsonOperacion).
+// Lo opcional de una venta (2.10.0): medio de pago, cliente y descuento; desde la 2.11.0 también un recargo, y
+// los dos en pesos o en porcentaje. Viajan al sincronizar como campos de más de cada venta, que las versiones
+// anteriores ignoran (ver Stock::jsonOperacion). Se guardan siempre en pesos.
 struct DatosVenta {
     QString medioPago;         // "Efectivo", "Transferencia"... (vacío = no se cargó)
     QString cliente;
-    double descuento = 0;      // en pesos: se resta del total
+    double descuento = 0;      // se resta del total
+    bool descuentoEnPorcentaje = false;   // false: en pesos; true: % del subtotal
+    double recargo = 0;        // se suma al total
+    bool recargoEnPorcentaje = false;
 };
+
+// Un descuento o recargo en pesos (redondeado a centavos). En porcentaje se calcula sobre el subtotal: si hay
+// descuento y recargo los dos van sobre el mismo subtotal, no uno encima del otro.
+inline double montoEnPesos(double valor, bool enPorcentaje, double subtotal)
+{
+    return std::round((enPorcentaje ? subtotal * valor / 100.0 : valor) * 100.0) / 100.0;
+}
 
 // Los que se ofrecen en la venta (se puede escribir otro)
 inline QStringList mediosDePago()
@@ -151,10 +163,10 @@ struct Operacion {
     QString uuid;
     TipoOperacion tipo = TipoOperacion::Venta;
     QString fecha;
-    double total = 0;          // ya con el descuento
+    double total = 0;          // ya con el descuento y el recargo
     QString anulada;           // cuándo se anuló ("" = vigente). Anulada: el stock se devolvió y los reportes no la cuentan
     QString medioPago, cliente;
-    double descuento = 0;
+    double descuento = 0, recargo = 0;   // en pesos
     QList<ItemOperacion> items;
 
     bool estaAnulada() const { return !anulada.isEmpty(); }

@@ -835,6 +835,52 @@ private slots:
         QCOMPARE(compra.descuento, 0.0);
     }
 
+    // 2.11.0: recargo, y descuento/recargo en porcentaje (sobre el subtotal, guardados en pesos)
+    void ventaConRecargoYPorcentajes()
+    {
+        Stock s(":memory:");
+        const qint64 avena = s.crear(producto("Avena", 10, {{"", 1000}})).id;
+        const auto datos = [](double desc, bool descPct, double rec, bool recPct) {
+            DatosVenta d;
+            d.descuento = desc; d.descuentoEnPorcentaje = descPct; d.recargo = rec; d.recargoEnPorcentaje = recPct;
+            return d;
+        };
+        QVERIFY(!s.registrarOperacion(TipoOperacion::Venta, {{avena, 1, QString(), 1000}}, datos(101, true, 0, false)).ok);  // más del 100 %
+        QVERIFY(!s.registrarOperacion(TipoOperacion::Venta, {{avena, 1, QString(), 1000}}, datos(0, false, -5, false)).ok);
+        QVERIFY(!s.registrarOperacion(TipoOperacion::Venta, {{avena, 1, QString(), 1000}}, datos(1200, false, 100, false)).ok); // queda negativo
+        QCOMPARE(s.obtener(avena)->cantidad, 10);
+
+        // 2 × 1000 = 2000; − 10 % (200) + $ 300 = 2100
+        ResultadoOperacion r = s.registrarOperacion(TipoOperacion::Venta, {{avena, 2, QString(), 1000}}, datos(10, true, 300, false));
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QCOMPARE(r.total, 2100.0);
+        Operacion o = s.operaciones().first();
+        QCOMPARE(o.descuento, 200.0);
+        QCOMPARE(o.recargo, 300.0);
+        QCOMPARE(o.total, 2100.0);
+
+        // 1 × 999,99 + 10 % de recargo = 1099,99 (redondeado a centavos)
+        r = s.registrarOperacion(TipoOperacion::Venta, {{avena, 1, QString(), 999.99}}, datos(0, false, 10, true));
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QCOMPARE(r.total, 1099.99);
+        QCOMPARE(s.operaciones().first().recargo, 100.0);
+
+        // 100 % de descuento con recargo: los dos sobre el subtotal, queda el recargo
+        r = s.registrarOperacion(TipoOperacion::Venta, {{avena, 1, QString(), 1000}}, datos(100, true, 5, true));
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QCOMPARE(r.total, 50.0);
+
+        const QDate hoy = QDate::currentDate();
+        const Reporte rep = s.reporte(hoy, hoy);
+        QCOMPARE(rep.ventas, 2100.0 + 1099.99 + 50.0);
+        QCOMPARE(rep.masVendidos.first().importe, 2100.0 + 1099.99 + 50.0);   // descuento y recargo se reparten en lo vendido
+
+        // La compra no lleva recargo
+        QVERIFY(s.registrarOperacion(TipoOperacion::Compra, {{avena, 1, QString(), 300}}, datos(0, false, 50, false)).ok);
+        QCOMPARE(s.operaciones().first().total, 300.0);
+        QCOMPARE(s.operaciones().first().recargo, 0.0);
+    }
+
     void restaurarDeshaceEliminar()
     {
         Stock s(":memory:");

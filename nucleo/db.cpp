@@ -412,6 +412,7 @@ void Stock::asegurarColumnasOperaciones()
         {QStringLiteral("medio_pago"), QStringLiteral("TEXT NOT NULL DEFAULT ''")},
         {QStringLiteral("cliente"), QStringLiteral("TEXT NOT NULL DEFAULT ''")},
         {QStringLiteral("descuento"), QStringLiteral("REAL NOT NULL DEFAULT 0")},
+        {QStringLiteral("recargo"), QStringLiteral("REAL NOT NULL DEFAULT 0")},      // 2.11.0, igual que las de arriba
     };
     bool falta = false;
     for (const auto& n : nuevas) if (!cols.contains(n.first)) falta = true;

@@ -17,9 +17,11 @@
 #include <QCalendarWidget>
 #include <QCheckBox>
 #include <QDateEdit>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QHeaderView>
 #include <QInputDialog>
+#include <QDoubleSpinBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -1216,6 +1218,35 @@ private slots:
         DialogoOperacion compra(TipoOperacion::Compra, stock_->listar(), {id(0)});
         QVERIFY(compra.findChild<QWidget*>("comboMedioPago")->isHidden());           // la compra no los muestra
         QCOMPARE(compra.datosVenta().descuento, 0.0);
+        QVERIFY(compra.findChild<QWidget*>("spinRecargo")->isHidden());
+    }
+
+    void ventaConRecargoYPorcentaje()
+    {
+        DialogoOperacion venta(TipoOperacion::Venta, stock_->listar(), {id(0)});
+        venta.fijarPrecio(0, 1000);
+        venta.fijarCantidad(0, 2);
+        DatosVenta d;
+        d.descuento = 10; d.descuentoEnPorcentaje = true;                          // − 200
+        d.recargo = 150;                                                             // + 150
+        venta.fijarDatosVenta(d);
+        QCOMPARE(venta.total(), 1950.0);
+        QVERIFY(venta.datosVenta().descuentoEnPorcentaje);
+        QVERIFY(!venta.datosVenta().recargoEnPorcentaje);
+        QCOMPARE(venta.findChild<QDoubleSpinBox*>("spinDescuento")->suffix(), QString(" %"));
+        QVERIFY(venta.findChild<QLabel*>("labelTotal")->text().contains("recargo"));
+        const ResultadoOperacion r = stock_->registrarOperacion(TipoOperacion::Venta, venta.lineas(), venta.datosVenta());
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QCOMPARE(r.total, 1950.0);
+        // En % el descuento no pasa de 100
+        d.descuento = 300;
+        venta.fijarDatosVenta(d);
+        QCOMPARE(venta.datosVenta().descuento, 100.0);
+        // Pasar $ 500 a «en %» no lo deja en 100 % sin avisar (la venta quedaba en $ 0): se vacía
+        d.descuento = 500; d.descuentoEnPorcentaje = false;
+        venta.fijarDatosVenta(d);
+        venta.findChild<QComboBox*>("comboTipoDescuento")->setCurrentIndex(1);
+        QCOMPARE(venta.datosVenta().descuento, 0.0);
     }
 
 };
