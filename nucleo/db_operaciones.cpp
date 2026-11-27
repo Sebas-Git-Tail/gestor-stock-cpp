@@ -15,7 +15,7 @@ using namespace dbi;
 
 // ====================================================================== ventas y compras
 
-ResultadoOperacion Stock::registrarOperacion(TipoOperacion tipo, const QList<LineaOperacion>& lineas)
+ResultadoOperacion Stock::registrarOperacion(TipoOperacion tipo, const QList<LineaOperacion>& lineas, const DatosVenta& datos)
 {
     ResultadoOperacion r;
     if (lineas.isEmpty()) {
@@ -29,6 +29,12 @@ ResultadoOperacion Stock::registrarOperacion(TipoOperacion tipo, const QList<Lin
         }
     }
     const bool venta = tipo == TipoOperacion::Venta;
+    const DatosVenta extra = venta ? datos : DatosVenta{};     // las compras no llevan medio de pago, cliente ni descuento
+    const double descuento = aCentavos(extra.descuento);
+    if (descuento < 0) {
+        r.error = QStringLiteral("El descuento no puede ser negativo.");
+        return r;
+    }
     try {
         Transaccion t(db_);                        // si algo falla, no se toca el stock de ningún producto
         double total = 0;
@@ -53,9 +59,15 @@ ResultadoOperacion Stock::registrarOperacion(TipoOperacion tipo, const QList<Lin
             anotadas.append({l, q.value(0).toString(), nombre});
         }
         total = aCentavos(total);
+        if (descuento > total) {
+            r.error = QStringLiteral("El descuento (%1) no puede ser mayor que el total (%2).").arg(formatearPrecio(descuento), formatearPrecio(total));
+            return r;
+        }
+        total = aCentavos(total - descuento);
 
-        QSqlQuery op = consulta(db_, "INSERT INTO operaciones (uuid, tipo, fecha, total) VALUES (?, ?, ?, ?)",
-                                {uuidNuevo(), venta ? "venta" : "compra", QDateTime::currentDateTime().toString(Qt::ISODate), total});
+        QSqlQuery op = consulta(db_, "INSERT INTO operaciones (uuid, tipo, fecha, total, medio_pago, cliente, descuento) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                {uuidNuevo(), venta ? "venta" : "compra", QDateTime::currentDateTime().toString(Qt::ISODate), total,
+                                 texto(extra.medioPago.simplified()), texto(extra.cliente.simplified()), descuento});
         const qint64 idOperacion = op.lastInsertId().toLongLong();
         marcar("operaciones", idOperacion);
         QSet<QString> tocados;
@@ -81,29 +93,101 @@ ResultadoOperacion Stock::registrarOperacion(TipoOperacion tipo, const QList<Lin
 
 QList<Operacion> Stock::operaciones(int limite) const
 {
+    FiltroOperaciones f;
+    f.limite = limite;
+    return operaciones(f);
+}
+
+QList<Operacion> Stock::operaciones(const FiltroOperaciones& f) const
+{
     QList<Operacion> lista;
     try {
-        QSqlQuery q = consulta(db_, "SELECT id, tipo, fecha, total FROM operaciones ORDER BY id DESC LIMIT ?", {limite});
+        QString sql = QStringLiteral("SELECT id, uuid, tipo, fecha, total, anulada, medio_pago, cliente, descuento FROM operaciones WHERE 1 = 1 ");
+        QVariantList params;
+        if (f.tipo) {
+            sql += QStringLiteral("AND tipo = ? ");
+            params << (*f.tipo == TipoOperacion::Venta ? QStringLiteral("venta") : QStringLiteral("compra"));
+        }
+        // fecha es «2026-11-13T17:05:00»: los primeros 10 caracteres son el día
+        if (f.desde.isValid()) { sql += QStringLiteral("AND substr(fecha, 1, 10) >= ? "); params << f.desde.toString(Qt::ISODate); }
+        if (f.hasta.isValid()) { sql += QStringLiteral("AND substr(fecha, 1, 10) <= ? "); params << f.hasta.toString(Qt::ISODate); }
+        if (!f.conAnuladas) sql += QStringLiteral("AND anulada = '' ");
+        sql += QStringLiteral("ORDER BY fecha DESC, id DESC LIMIT ?");
+        params << f.limite;
+        QSqlQuery q = consulta(db_, sql, params);
         while (q.next()) {
             Operacion o;
             o.id = q.value(0).toLongLong();
-            o.tipo = q.value(1).toString() == QLatin1String("venta") ? TipoOperacion::Venta : TipoOperacion::Compra;
-            o.fecha = q.value(2).toString();
-            o.total = q.value(3).toDouble();
+            o.uuid = q.value(1).toString();
+            o.tipo = q.value(2).toString() == QLatin1String("venta") ? TipoOperacion::Venta : TipoOperacion::Compra;
+            o.fecha = q.value(3).toString();
+            o.total = q.value(4).toDouble();
+            o.anulada = q.value(5).toString();
+            o.medioPago = q.value(6).toString();
+            o.cliente = q.value(7).toString();
+            o.descuento = q.value(8).toDouble();
             lista.append(o);
         }
         for (Operacion& o : lista) {
             QSqlQuery i = consulta(db_,
-                "SELECT producto_id, nombre, presentacion, cantidad, precio_unitario FROM operacion_items WHERE operacion_id = ? ORDER BY id",
-                {o.id});
+                "SELECT producto_id, nombre, presentacion, cantidad, precio_unitario, producto_uuid FROM operacion_items "
+                "WHERE operacion_id = ? ORDER BY id", {o.id});
             while (i.next()) {
                 o.items.append({i.value(0).toLongLong(), i.value(1).toString(), i.value(2).toString(),
-                                i.value(3).toInt(), i.value(4).toDouble()});
+                                i.value(3).toInt(), i.value(4).toDouble(), i.value(5).toString()});
             }
         }
     } catch (const std::exception&) {
     }
     return lista;
+}
+
+// La venta/compra no se borra (así se sabe que existió, y la anulación llega al otro dispositivo): queda marcada
+// y el stock vuelve con un ajuste por producto («Anulación de venta»). Las versiones anteriores, que no conocen
+// la marca, reciben igual esos ajustes: el stock queda bien en las dos; solo sus reportes la siguen contando.
+Resultado Stock::anularOperacion(qint64 id)
+{
+    try {
+        Transaccion t(db_);
+        QSqlQuery q = consulta(db_, "SELECT uuid, tipo, anulada FROM operaciones WHERE id = ?", {id});
+        if (!q.next()) return {false, QStringLiteral("Esa venta o compra ya no existe."), id};
+        const QString uuidOperacion = q.value(0).toString();
+        const bool venta = q.value(1).toString() == QLatin1String("venta");
+        if (!q.value(2).toString().isEmpty())
+            return {false, venta ? QStringLiteral("Esa venta ya estaba anulada.") : QStringLiteral("Esa compra ya estaba anulada."), id};
+
+        struct Movido { QString uuid, nombre; qint64 cantidad = 0; };
+        QList<Movido> movidos;               // cuánto se movió de cada producto
+        QSqlQuery i = consulta(db_, "SELECT producto_uuid, MAX(nombre), SUM(cantidad) FROM operacion_items "
+                                    "WHERE operacion_id = ? AND producto_uuid != '' GROUP BY producto_uuid", {id});
+        while (i.next()) movidos.append({i.value(0).toString(), i.value(1).toString(), i.value(2).toLongLong()});
+
+        const QString ahoraTexto = QDateTime::currentDateTime().toString(Qt::ISODate);
+        for (const Movido& m : movidos) {
+            if (!venta) {                    // lo comprado ya se pudo haber vendido: el stock no puede quedar negativo
+                const bool existe = valor(db_, "SELECT COUNT(*) FROM productos WHERE uuid = ? AND borrado = 0", {m.uuid}).toInt() > 0;
+                const qint64 hay = sumaMovimientos(m.uuid);
+                if (existe && hay < m.cantidad)
+                    return {false, QStringLiteral("No se puede anular la compra: de «%1» quedan %2 y se habían comprado %3 (ya se vendió una parte). "
+                                                  "Si hace falta, corregí la cantidad a mano.").arg(m.nombre).arg(hay).arg(m.cantidad), id};
+            }
+            // uuid fijo (la venta/compra + el producto): si se anula en la PC y en el celular antes de sincronizar,
+            // al juntarse queda un solo ajuste y el stock se devuelve una sola vez
+            const QString uuidAjuste = QStringLiteral("anul-%1-%2").arg(uuidOperacion, m.uuid);
+            if (valor(db_, "SELECT id FROM ajustes_stock WHERE uuid = ?", {uuidAjuste}).isValid()) continue;
+            QSqlQuery a = consulta(db_, "INSERT INTO ajustes_stock (uuid, producto_uuid, delta, fecha, motivo) VALUES (?, ?, ?, ?, ?)",
+                                   {uuidAjuste, m.uuid, venta ? m.cantidad : -m.cantidad, ahoraTexto,
+                                    venta ? QStringLiteral("Anulación de venta") : QStringLiteral("Anulación de compra")});
+            marcar("ajustes_stock", a.lastInsertId().toLongLong());
+        }
+        consulta(db_, "UPDATE operaciones SET anulada = ? WHERE id = ?", {ahoraTexto, id});
+        marcar("operaciones", id);
+        for (const Movido& m : movidos) recalcularCantidad(m.uuid);
+        t.confirmar();
+        return {true, QString(), id};
+    } catch (const std::exception& e) {
+        return {false, QString::fromUtf8(e.what()), id};
+    }
 }
 
 // ====================================================================== reportes y avisos
@@ -116,7 +200,7 @@ QHash<QString, double> costosPromedio(const QSqlDatabase& db)
     QSqlQuery q = consulta(db,
         "SELECT i.producto_uuid, SUM(i.cantidad * i.precio_unitario) / SUM(i.cantidad) FROM operacion_items i "
         "JOIN operaciones o ON o.id = i.operacion_id "
-        "WHERE o.tipo = 'compra' AND i.precio_unitario > 0 AND i.cantidad > 0 GROUP BY i.producto_uuid");
+        "WHERE o.tipo = 'compra' AND o.anulada = '' AND i.precio_unitario > 0 AND i.cantidad > 0 GROUP BY i.producto_uuid");
     while (q.next()) costos.insert(q.value(0).toString(), q.value(1).toDouble());
     return costos;
 }
@@ -158,7 +242,7 @@ Reporte Stock::reporte(const QDate& desde, const QDate& hasta) const
         // fecha es «2026-11-13T17:05:00»: los primeros 10 caracteres son el día
         QSqlQuery q = consulta(db_,
             "SELECT tipo, COUNT(*), COALESCE(SUM(total), 0) FROM operaciones "
-            "WHERE substr(fecha, 1, 10) BETWEEN ? AND ? GROUP BY tipo", {d, h});
+            "WHERE substr(fecha, 1, 10) BETWEEN ? AND ? AND anulada = '' GROUP BY tipo", {d, h});
         while (q.next()) {
             if (q.value(0).toString() == QLatin1String("venta")) {
                 r.cantidadVentas = q.value(1).toInt();
@@ -169,7 +253,7 @@ Reporte Stock::reporte(const QDate& desde, const QDate& hasta) const
         }
 
         QSqlQuery dias = consulta(db_,
-            "SELECT substr(fecha, 1, 10), SUM(total) FROM operaciones WHERE tipo = 'venta' "
+            "SELECT substr(fecha, 1, 10), SUM(total) FROM operaciones WHERE tipo = 'venta' AND anulada = '' "
             "AND substr(fecha, 1, 10) BETWEEN ? AND ? GROUP BY 1 ORDER BY 1", {d, h});
         QMap<QString, double> meses;
         while (dias.next()) {
@@ -184,9 +268,12 @@ Reporte Stock::reporte(const QDate& desde, const QDate& hasta) const
         // El costo sale de la «Ganancia %» del producto si la tiene (precio = costo + %), si no del promedio de las compras
         const QHash<QString, double> costos = costosPromedio(db_);
         const QHash<QString, double> porcentajes = porcentajesGanancia(db_);
+        // Si la venta tuvo descuento, el importe de cada producto se achica en la misma proporción
         QSqlQuery items = consulta(db_,
-            "SELECT i.producto_uuid, MAX(i.nombre), SUM(i.cantidad), SUM(i.cantidad * i.precio_unitario) FROM operacion_items i "
-            "JOIN operaciones o ON o.id = i.operacion_id WHERE o.tipo = 'venta' "
+            "SELECT i.producto_uuid, MAX(i.nombre), SUM(i.cantidad), "
+            "SUM(i.cantidad * i.precio_unitario * CASE WHEN o.descuento > 0 AND o.total + o.descuento > 0 "
+            "THEN o.total / (o.total + o.descuento) ELSE 1 END) FROM operacion_items i "
+            "JOIN operaciones o ON o.id = i.operacion_id WHERE o.tipo = 'venta' AND o.anulada = '' "
             "AND substr(o.fecha, 1, 10) BETWEEN ? AND ? GROUP BY i.producto_uuid", {d, h});
         while (items.next()) {
             const QString uuid = items.value(0).toString();

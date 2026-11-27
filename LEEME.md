@@ -31,6 +31,17 @@ Poné tu `Logo.svg` en `data/` antes de construir (el `.desktop` usa `Icon=Logo`
 Además: la búsqueda ignora mayúsculas y tildes (`azucar` encuentra `AZÚCAR`), y cada venta/compra queda
 guardada en la base (tablas `operaciones` y `operacion_items`) con fecha y total.
 
+## Versión 2.10.0
+| Pedido | Cómo quedó |
+|---|---|
+| Historial de operaciones | Botón **Historial** (PC) / menú → Historial de ventas y compras (celular): lista por fecha con el detalle, filtro por tipo y fechas (`Stock::operaciones(FiltroOperaciones)`) |
+| Anular (devoluciones) | `Stock::anularOperacion`: ajustes inversos en una transacción (uuid fijo `anul-<op>-<producto>`) y la venta/compra queda con `anulada`; no se borra y los reportes no la cuentan. Una compra no se anula si el stock quedaría negativo |
+| Medio de pago, cliente y descuento | Opcionales en la venta. Columnas nuevas de `operaciones` agregadas con ALTER TABLE **sin cambiar el esquema** (sigue en 4): la 2.9.x abre la base y, al sincronizar, ignora los campos nuevos (`anul`, `mp`, `cli`, `desc`) pero recibe los ajustes de stock |
+| Deshacer al eliminar | El núcleo borra (borrado lógico, sincroniza) y `Stock::restaurar(producto)` lo trae de vuelta con sus datos; lo usan la PC y el celular |
+| Código que no existe | Lector USB (Enter en el buscador de la PC) o escáner del celular: «Crear producto con este código» |
+| Celular | Copia de seguridad y exportar CSV (el mismo CSV que la PC, `csvDeProductos` en `nucleo/util`), Reportes con Desde/Hasta |
+| Copia automática | `Stock::copiaDiaria`: `backups/automatica_AAAA-MM-DD.db`, quedan las últimas 7 (las copias a mano no se tocan) |
+
 ## Versión 2.4.0
 | Pedido | Cómo quedó |
 |---|---|
@@ -98,6 +109,7 @@ Al pegar:
 | `escritorio/ventanaprincipal.cpp` | Tabla, búsqueda, posición recordada, avisos, acciones, copiar y pegar |
 | `escritorio/dialogooperacion.cpp` | Ventana de venta / compra |
 | `escritorio/dialogoreportes.cpp` | Reportes y avisos |
+| `escritorio/dialogohistorial.cpp` | Historial de ventas y compras (anular) |
 | `escritorio/portapapeles.cpp` | Convierte renglones a texto (para otros programas) y texto a productos |
 | `escritorio/xlsxlector.cpp`, `importarexcel.cpp` | Importación desde Excel (sin librerías externas) |
 | `movil/qml/*.qml` | Las pantallas del celular |
@@ -108,5 +120,5 @@ Al pegar:
 Si renombrás un widget en Designer, hay que cambiarlo también en el `.cpp` (el compilador avisa).
 
 ## Se guarda en
-- Base de datos: `~/.local/share/gestor-stock/stock.db` (backups en `backups/` al lado)
+- Base de datos: `~/.local/share/gestor-stock/stock.db` (backups en `backups/` al lado, con una copia automática por día: quedan 7)
 - Posición, tamaño de ventana, columnas y orden: `~/.config/gestor-stock/gestor-stock.conf`

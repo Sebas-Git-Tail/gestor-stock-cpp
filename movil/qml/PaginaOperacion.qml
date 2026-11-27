@@ -10,12 +10,15 @@ Page {
     property bool venta: true
     property var lineas: []                          // [{id, nombre, stock, cantidad, presentacion, precio, presets}]
     property var resultados: []
+    property string codigoPendiente: ""              // código escaneado sin producto: se está creando
+    property string descuento: ""                    // solo en la venta, opcional (en pesos)
 
     function numero(t) {                             // «1.234,5» o «1234.5» -> número
         const s = String(t).replace(/\s|\$/g, "")
         return parseFloat(s.indexOf(",") >= 0 ? s.replace(/\./g, "").replace(",", ".") : (/^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, "") : s)) || 0
     }
-    readonly property real total: { let t = 0; for (const l of lineas) t += l.cantidad * numero(l.precio); return t }
+    readonly property real subtotal: { let t = 0; for (const l of lineas) t += l.cantidad * numero(l.precio); return t }
+    readonly property real total: venta ? subtotal - numero(descuento) : subtotal
 
     function agregar(p) {
         const ls = lineas.slice()
@@ -29,7 +32,8 @@ Page {
         resultados = []
     }
     function confirmar() {
-        const r = App.registrarOperacion(venta, lineas.map(l => ({ id: l.id, cantidad: l.cantidad, presentacion: l.presentacion, precio: l.precio })))
+        const r = App.registrarOperacion(venta, lineas.map(l => ({ id: l.id, cantidad: l.cantidad, presentacion: l.presentacion, precio: l.precio })),
+                                         { medioPago: campoMedio.editText, cliente: campoCliente.text, descuento: pagina.descuento })
         if (r.ok) { ventana.avisar(venta ? "Venta registrada: " + r.total : "Compra registrada: el stock ya está actualizado"); pila.pop() }
         else error.text = r.error
     }
@@ -65,8 +69,16 @@ Page {
                 if (codigo === "") return
                 const r = App.buscarProductos(codigo)
                 if (r.length === 1) pagina.agregar(r[0])
-                else { campoBuscar.text = codigo; if (r.length === 0) ventana.avisar("Ningún producto tiene el código " + codigo) }
+                else if (r.length === 0) { crearConCodigo.codigo = codigo; crearConCodigo.open() }
+                else campoBuscar.text = codigo
             }
+        }
+        // Al volver de crear el producto del código escaneado, entra directo en la operación
+        StackView.onActivated: {
+            if (pagina.codigoPendiente === "") return
+            const r = App.buscarProductos(pagina.codigoPendiente)
+            pagina.codigoPendiente = ""
+            if (r.length === 1) pagina.agregar(r[0])
         }
         ListView {
             Layout.fillWidth: true
@@ -135,10 +147,39 @@ Page {
             }
             Label { anchors.centerIn: parent; visible: listaLineas.count === 0; color: ventana.tintaApagada; text: "Buscá los productos arriba para agregarlos." }
         }
+        // Venta: medio de pago, cliente y descuento (todo opcional)
+        GridLayout {
+            visible: pagina.venta
+            Layout.fillWidth: true
+            columns: 2
+            columnSpacing: 8
+            ComboBox {
+                id: campoMedio
+                Layout.fillWidth: true
+                editable: true
+                model: [""].concat(App.mediosDePago)
+                displayText: editText === "" ? "Medio de pago (opcional)" : editText
+                Accessible.name: "Medio de pago"
+            }
+            TextField {
+                implicitWidth: 120
+                placeholderText: "Descuento $"
+                text: pagina.descuento
+                inputMethodHints: Qt.ImhFormattedNumbersOnly
+                onTextEdited: pagina.descuento = text
+            }
+            TextField {
+                id: campoCliente
+                Layout.fillWidth: true
+                Layout.columnSpan: 2
+                placeholderText: "Cliente (opcional)"
+            }
+        }
         Label { id: error; Layout.fillWidth: true; color: "#e34948"; wrapMode: Text.WordWrap; visible: text !== "" }
         Label {
             visible: pagina.venta || pagina.total > 0
-            text: (pagina.venta ? "Total: " : "Total de la compra: ") + App.precioTexto(pagina.total)
+            text: (pagina.venta ? (pagina.numero(pagina.descuento) > 0 ? App.precioTexto(pagina.subtotal) + " − " + App.precioTexto(pagina.numero(pagina.descuento)) + " = Total: " : "Total: ")
+                                : "Total de la compra: ") + App.precioTexto(pagina.total)
             font.pixelSize: 22; font.bold: true
         }
         Label {
@@ -155,6 +196,30 @@ Page {
             highlighted: true
             enabled: pagina.lineas.length > 0
             onClicked: pagina.confirmar()
+        }
+    }
+
+    Dialog {
+        id: crearConCodigo
+        property string codigo: ""
+        title: "Código nuevo"
+        modal: true
+        anchors.centerIn: parent
+        width: Math.min(ventana.width - 32, 380)
+        standardButtons: Dialog.Cancel
+        ColumnLayout {
+            width: parent.width
+            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: "Ningún producto tiene el código " + crearConCodigo.codigo + "." }
+            Button {
+                Layout.fillWidth: true
+                text: "Crear producto con este código"
+                highlighted: true
+                onClicked: {
+                    crearConCodigo.close()
+                    pagina.codigoPendiente = crearConCodigo.codigo
+                    pila.push(editor, { idProducto: 0, codigoInicial: crearConCodigo.codigo })
+                }
+            }
         }
     }
 }

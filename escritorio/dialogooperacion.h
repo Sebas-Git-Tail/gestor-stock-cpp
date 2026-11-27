@@ -13,6 +13,7 @@ namespace Ui { class DialogoOperacion; }
  * Ventana de venta o compra (dialogo_operacion.ui).
  *  - Venta: cada producto lleva presentación/precio y cantidad; muestra el subtotal de cada uno y el TOTAL.
  *    La cantidad no puede pasar del stock.
+ *    Opcionales: medio de pago, cliente y descuento (en pesos, se resta del total).
  *  - Compra: solo cantidades (suma stock).
  * Los productos se cargan con los que estaban seleccionados en la tabla y se pueden agregar más con el buscador.
  */
@@ -25,7 +26,8 @@ public:
     ~DialogoOperacion() override;
 
     QList<LineaOperacion> lineas() const;
-    double total() const;
+    double total() const;                        // en la venta, ya con el descuento
+    DatosVenta datosVenta() const;               // medio de pago, cliente y descuento (vacío en la compra)
 
     void accept() override;
 
@@ -36,6 +38,7 @@ public:
     void fijarPrecio(int fila, double precio);
     void elegirPresentacion(int fila, int indice);
     void agregarDesdeTexto(const QString& texto);
+    void fijarDatosVenta(const DatosVenta& d);
 
 private:
     int filaDe(qint64 id) const;

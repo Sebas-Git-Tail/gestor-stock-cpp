@@ -22,6 +22,7 @@ public:
     ~DialogoProducto() override;
 
     Producto resultado() const;       // los datos cargados (usar después de aceptar)
+    void fijarCodigo(const QString& codigo);   // producto nuevo con el código que leyó el lector
     void accept() override;           // valida antes de cerrar
 
     // Para las pruebas

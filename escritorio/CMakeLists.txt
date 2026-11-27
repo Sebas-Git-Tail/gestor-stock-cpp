@@ -11,6 +11,7 @@ add_library(gsescritorio STATIC
     dialogocolumnas.h dialogocolumnas.cpp dialogo_columnas.ui
     dialogosincronizacion.h dialogosincronizacion.cpp dialogo_sincronizacion.ui
     dialogoreportes.h dialogoreportes.cpp dialogo_reportes.ui
+    dialogohistorial.h dialogohistorial.cpp dialogo_historial.ui
     ventanaprincipal.h ventanaprincipal.cpp main.ui
 )
 target_include_directories(gsescritorio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

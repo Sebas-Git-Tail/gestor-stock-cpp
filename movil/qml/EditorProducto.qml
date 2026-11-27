@@ -8,6 +8,7 @@ import GestorStock
 Page {
     id: editor
     property int idProducto: 0
+    property string codigoInicial: ""                // producto nuevo desde un código escaneado que no existía
     property var datos: App.producto(idProducto)
     property var precios: datos.precios ? datos.precios.slice() : []
     property var propios: ({})                       // lo escrito en las columnas propias: uuid -> texto
@@ -17,7 +18,7 @@ Page {
 
     function valorInicial(c) {
         switch (c.clave) {
-        case "codigo": return datos.codigo
+        case "codigo": return datos.codigo || codigoInicial
         case "nombre": return datos.nombre
         case "categoria": return datos.categoria
         case "proveedor": return datos.proveedor
@@ -30,7 +31,7 @@ Page {
         return datos.extra[c.uuid] || ""
     }
     function guardar() {
-        const d = { id: idProducto, codigo: simples.codigo || (datos.codigo || ""), nombre: simples.nombre !== undefined ? simples.nombre : datos.nombre,
+        const d = { id: idProducto, codigo: simples.codigo !== undefined ? simples.codigo : (datos.codigo || codigoInicial), nombre: simples.nombre !== undefined ? simples.nombre : datos.nombre,
                     categoria: datos.categoria, proveedor: datos.proveedor, cantidad: datos.cantidad, stockMinimo: datos.stockMinimo,
                     vencimiento: datos.vencimiento, medidaBolsa: datos.medidaBolsa, notas: datos.notas, precios: precios, extra: {} }
         const claves = { codigo: "codigo", nombre: "nombre", categoria: "categoria", proveedor: "proveedor", cantidad: "cantidad",
@@ -131,7 +132,7 @@ Page {
         standardButtons: Dialog.Yes | Dialog.No
         onAccepted: {
             const e = App.eliminarProducto(editor.idProducto)
-            if (e === "") { ventana.avisar("Producto eliminado"); pila.pop() }
+            if (e === "") { ventana.avisarEliminado(datos.nombre); pila.pop() }
             else error.text = e
         }
     }

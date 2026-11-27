@@ -4,6 +4,8 @@
 #include <QHash>
 #include <QList>
 #include <QString>
+#include <QStringList>
+#include <optional>
 
 struct Precio {
     QString presentacion;      // "500 g", "250 g"... (puede quedar vacío)
@@ -126,14 +128,44 @@ struct ItemOperacion {
     QString nombre, presentacion;
     int cantidad = 0;
     double precioUnitario = 0;
+    QString productoUuid;
 };
+
+// Lo opcional de una venta (2.10.0): medio de pago, cliente y descuento. Viajan al sincronizar como campos
+// de más de cada venta, que las versiones anteriores ignoran (ver Stock::jsonOperacion).
+struct DatosVenta {
+    QString medioPago;         // "Efectivo", "Transferencia"... (vacío = no se cargó)
+    QString cliente;
+    double descuento = 0;      // en pesos: se resta del total
+};
+
+// Los que se ofrecen en la venta (se puede escribir otro)
+inline QStringList mediosDePago()
+{
+    return {QStringLiteral("Efectivo"), QStringLiteral("Transferencia"), QStringLiteral("Débito"), QStringLiteral("Crédito"),
+            QStringLiteral("Mercado Pago")};
+}
 
 struct Operacion {
     qint64 id = 0;
+    QString uuid;
     TipoOperacion tipo = TipoOperacion::Venta;
     QString fecha;
-    double total = 0;
+    double total = 0;          // ya con el descuento
+    QString anulada;           // cuándo se anuló ("" = vigente). Anulada: el stock se devolvió y los reportes no la cuentan
+    QString medioPago, cliente;
+    double descuento = 0;
     QList<ItemOperacion> items;
+
+    bool estaAnulada() const { return !anulada.isEmpty(); }
+};
+
+// Qué ventas y compras mostrar en el historial (ver Stock::operaciones)
+struct FiltroOperaciones {
+    std::optional<TipoOperacion> tipo;   // sin valor = ventas y compras
+    QDate desde, hasta;                  // inválidas = sin límite
+    bool conAnuladas = true;
+    int limite = 500;
 };
 
 // Lo más vendido de un período

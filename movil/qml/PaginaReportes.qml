@@ -9,8 +9,18 @@ import GestorStock
 Page {
     id: pagina
     property bool verAvisos: false
-    property int periodo: 2                        // este mes
-    property var datos: App.reporte(periodo)
+    property int periodo: 2                        // este mes; 5 = fechas elegidas
+    property string desdeIso: App.rangoPeriodo(2).desde
+    property string hastaIso: App.rangoPeriodo(2).hasta
+    property var datos: App.reporteFechas(desdeIso, hastaIso)
+
+    function elegirPeriodo(i) {
+        periodo = i
+        if (i === 5) return                          // «Elegir fechas»: quedan las que están
+        const r = App.rangoPeriodo(i)
+        desdeIso = r.desde
+        hastaIso = r.hasta
+    }
 
     header: ToolBar {
         Material.foreground: "white"
@@ -20,6 +30,9 @@ Page {
             Label { text: "Reportes y avisos"; font.pixelSize: 18; font.bold: true; Layout.fillWidth: true }
         }
     }
+
+    SelectorFecha { id: selectorDesde; onElegida: (iso) => { pagina.periodo = 5; pagina.desdeIso = iso } }
+    SelectorFecha { id: selectorHasta; onElegida: (iso) => { pagina.periodo = 5; pagina.hastaIso = iso } }
 
     TabBar {
         id: pestanas
@@ -46,9 +59,15 @@ Page {
                 spacing: 10
                 ComboBox {
                     Layout.fillWidth: true
-                    model: ["Hoy", "Últimos 7 días", "Este mes", "Mes anterior", "Este año"]
+                    model: ["Hoy", "Últimos 7 días", "Este mes", "Mes anterior", "Este año", "Elegir fechas"]
                     currentIndex: pagina.periodo
-                    onActivated: (i) => pagina.periodo = i
+                    onActivated: (i) => pagina.elegirPeriodo(i)
+                }
+                // Desde / Hasta: como en la PC, elegir una fecha pasa a «Elegir fechas»
+                RowLayout {
+                    Layout.fillWidth: true
+                    Button { text: "Desde " + App.fechaCorta(pagina.desdeIso); flat: true; Layout.fillWidth: true; onClicked: selectorDesde.abrir(pagina.desdeIso) }
+                    Button { text: "Hasta " + App.fechaCorta(pagina.hastaIso); flat: true; Layout.fillWidth: true; onClicked: selectorHasta.abrir(pagina.hastaIso) }
                 }
                 Label { text: pagina.datos.periodo; color: ventana.tintaApagada; font.pixelSize: 12 }
                 GridLayout {

@@ -3,6 +3,7 @@
 #include "dialogooperacion.h"
 #include "dialogoproducto.h"
 #include "dialogoreportes.h"
+#include "dialogohistorial.h"
 #include "dialogosincronizacion.h"
 #include "portapapeles.h"
 #include "sincronizacion.h"
@@ -32,6 +33,7 @@
 #include <QTableWidget>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QTreeWidget>
 #include <QtTest>
 #include <functional>
 
@@ -1115,6 +1117,107 @@ private slots:
         DialogoReportes r(*stock_, DialogoReportes::Pestana::Avisos);
         QCOMPARE(r.cantidadAvisos(), 1);
     }
+
+    // ---------------------------------------------------------------- 2.10.0: historial, deshacer, lector y datos de la venta
+    void elHistorialMuestraYAnulaUnaVenta()
+    {
+        QVERIFY(stock_->registrarOperacion(TipoOperacion::Compra, {{id(1), 5, QString(), 0}}).ok);
+        QVERIFY(stock_->registrarOperacion(TipoOperacion::Venta, {{id(0), 3, "500 g", 1000}}, {"Efectivo", "Ana", 0}).ok);
+        const int antes = stock_->obtener(id(0))->cantidad;
+        DialogoHistorial d(*stock_);
+        QCOMPARE(d.arbol()->topLevelItemCount(), 2);
+        QCOMPARE(d.arbol()->topLevelItem(0)->text(1), QString("Venta"));               // la más nueva arriba
+        QVERIFY(d.arbol()->topLevelItem(0)->text(2).contains("Ana"));
+        QCOMPARE(d.arbol()->topLevelItem(0)->childCount(), 1);                        // el detalle
+        d.elegirTipo(2);
+        QCOMPARE(d.arbol()->topLevelItemCount(), 1);
+        d.elegirTipo(0);
+        d.fijarFechas(QDate::currentDate().addDays(1), QDate::currentDate().addDays(2));
+        QCOMPARE(d.arbol()->topLevelItemCount(), 0);
+        d.fijarFechas(QDate::currentDate().addDays(-3), QDate::currentDate());
+        QCOMPARE(d.arbol()->topLevelItemCount(), 2);
+
+        d.elegir(0);
+        int preguntas = 0;
+        Conductor c([&](QWidget* v) {
+            auto* m = qobject_cast<QMessageBox*>(v);
+            if (!m) return;
+            ++preguntas;
+            for (QAbstractButton* b : m->buttons()) if (b->text() == "Anular") { b->click(); return; }
+        });
+        d.anularElegida();
+        QCOMPARE(preguntas, 1);
+        QVERIFY(d.huboCambios());
+        QCOMPARE(stock_->obtener(id(0))->cantidad, antes + 3);                        // volvió al stock
+        QVERIFY(d.arbol()->topLevelItem(0)->text(4).startsWith("Anulada"));
+        QVERIFY(d.textoResumen().contains("1 anulada"));
+        d.elegir(0);
+        QVERIFY(!d.findChild<QPushButton*>("btnAnular")->isEnabled());               // ya está anulada
+    }
+
+    void eliminarBorraYaYDeshacerLoTraeDeVuelta()
+    {
+        auto w = abrir();
+        const Producto antes = *stock_->obtener(id(3));
+        w->seleccionar({id(3)}, id(3));
+        w->eliminar();
+        QVERIFY(!stock_->obtener(id(3)));                                             // borrado de verdad (le llega al celular)
+        QCOMPARE(w->cantidadDeFilas(), N - 1);
+        w->deshacerEliminar({antes});
+        QCOMPARE(w->cantidadDeFilas(), N);
+        QCOMPARE(stock_->obtener(id(3))->cantidad, antes.cantidad);
+        QCOMPARE(w->idsSeleccionados(), QList<qint64>{id(3)});
+    }
+
+    void unCodigoNuevoDelLectorOfreceCrearElProducto()
+    {
+        auto w = abrir();
+        int preguntas = 0;
+        bool creado = false;
+        Conductor c([&](QWidget* v) {
+            if (auto* m = qobject_cast<QMessageBox*>(v)) {
+                ++preguntas;
+                for (QAbstractButton* b : m->buttons()) if (b->text() == "Crear producto con este código") { b->click(); return; }
+            } else if (auto* d = qobject_cast<DialogoProducto*>(v); d && !creado) {
+                creado = true;
+                QCOMPARE(d->findChild<QLineEdit*>("inputCodigo")->text(), QString("7791234567890"));
+                d->findChild<QLineEdit*>("inputNombre")->setText("Galletitas");
+                d->accept();
+            }
+        });
+        w->buscador()->setText("7791234567890");                                      // lo que escribe el lector USB…
+        QTest::keyClick(w->buscador(), Qt::Key_Return);                              // …y el Enter
+        QCOMPARE(preguntas, 1);
+        QVERIFY(creado);
+        QCOMPARE(stock_->obtenerPorCodigo("7791234567890")->nombre, QString("Galletitas"));
+        QVERIFY(w->buscador()->text().isEmpty());
+        // Un código que ya existe (o un texto que encuentra productos) no pregunta nada
+        w->buscador()->setText("7791234567890");
+        QTest::keyClick(w->buscador(), Qt::Key_Return);
+        w->buscador()->setText("1050");
+        QTest::keyClick(w->buscador(), Qt::Key_Return);
+        QCOMPARE(preguntas, 1);
+    }
+
+    void ventaConMedioDePagoClienteYDescuento()
+    {
+        DialogoOperacion venta(TipoOperacion::Venta, stock_->listar(), {id(0)});
+        venta.fijarPrecio(0, 1000);
+        venta.fijarCantidad(0, 2);
+        venta.fijarDatosVenta({"Débito", "Ana", 300});
+        QCOMPARE(venta.total(), 1700.0);
+        QCOMPARE(venta.datosVenta().medioPago, QString("Débito"));
+        QCOMPARE(venta.datosVenta().cliente, QString("Ana"));
+        const ResultadoOperacion r = stock_->registrarOperacion(TipoOperacion::Venta, venta.lineas(), venta.datosVenta());
+        QVERIFY(r.ok);
+        QCOMPARE(r.total, 1700.0);
+        venta.fijarDatosVenta({"", "", 5000});                                       // más que el total: no deja confirmar
+        QVERIFY(!venta.findChild<QDialogButtonBox*>("buttonBox")->button(QDialogButtonBox::Ok)->isEnabled());
+        DialogoOperacion compra(TipoOperacion::Compra, stock_->listar(), {id(0)});
+        QVERIFY(compra.findChild<QWidget*>("comboMedioPago")->isHidden());           // la compra no los muestra
+        QCOMPARE(compra.datosVenta().descuento, 0.0);
+    }
+
 };
 
 QTEST_MAIN(TstVentana)

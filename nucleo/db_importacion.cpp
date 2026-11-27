@@ -8,6 +8,7 @@
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QSet>
 #include <algorithm>
 
@@ -101,4 +102,31 @@ Resultado Stock::backup(const QString& destino)
     } catch (const std::exception& e) {
         return {false, QString::fromUtf8(e.what()), 0};
     }
+}
+
+QString Stock::carpetaCopias() const
+{
+    return QFileInfo(ruta_).absolutePath() + QStringLiteral("/backups");
+}
+
+Resultado Stock::copiaDiaria(const QDate& hoy, int conservar)
+{
+    if (ruta_ == QLatin1String(":memory:") || !abierta_) return {true, QString(), 0};
+    const QDir carpeta(carpetaCopias());
+    const QString nombre = QStringLiteral("automatica_%1.db").arg(hoy.toString(Qt::ISODate));
+    if (carpeta.exists(nombre)) return {true, QString(), 0};
+    // Primero con otro nombre: una copia que quedó a medias (se cortó la luz) no cuenta como la del día
+    const QString temporal = carpeta.filePath(nombre + QStringLiteral(".tmp"));
+    const Resultado r = backup(temporal);
+    if (!r.ok || !QFile::rename(temporal, carpeta.filePath(nombre))) {
+        QFile::remove(temporal);
+        return {false, r.ok ? QStringLiteral("No se pudo guardar la copia del día.") : r.error, 0};
+    }
+    // Quedan las últimas: solo se borran las automáticas (las de «Copia de seguridad» y las de antes de importar no)
+    static const QRegularExpression patron(QStringLiteral(R"(^automatica_\d{4}-\d{2}-\d{2}\.db$)"));
+    QStringList automaticas;
+    for (const QString& f : carpeta.entryList({QStringLiteral("automatica_*.db")}, QDir::Files, QDir::Name))
+        if (patron.match(f).hasMatch()) automaticas << f;              // por nombre = de la más vieja a la más nueva
+    while (automaticas.size() > qMax(1, conservar)) QFile::remove(carpeta.filePath(automaticas.takeFirst()));
+    return {true, QString(), 1};
 }

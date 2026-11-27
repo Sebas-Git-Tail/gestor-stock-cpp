@@ -236,6 +236,7 @@ Stock::Stock(const QString& ruta)
             t.confirmar();
         }
         asegurarColumnaGanancia();
+        asegurarColumnasOperaciones();
         abierta_ = true;
     } catch (const std::exception& e) {
         errorApertura_ = QString::fromUtf8(e.what());
@@ -392,6 +393,32 @@ void Stock::asegurarColumnaGanancia()
     const int orden = valor(db_, "SELECT COALESCE(MAX(orden), -1) + 1 FROM columnas").toInt();
     consulta(db_, "INSERT INTO columnas (uuid, clave, nombre, tipo, orden, visible, modificado, autor, cambio) VALUES (?, '', ?, ?, ?, 0, 1, '', ?)",
              {uuid, QStringLiteral("Ganancia %"), textoTipoColumna(TipoColumna::Numero), orden, siguienteCambio()});
+    t.confirmar();
+}
+
+// 2.10.0: cuándo se anuló cada venta/compra, y el medio de pago, el cliente y el descuento de las ventas.
+// Se agregan con ALTER TABLE y SIN cambiar el número de esquema: así la 2.9.x puede seguir abriendo la base
+// (siempre nombra las columnas que usa, y las nuevas tienen valor por defecto). Al sincronizar viajan como
+// campos de más de cada venta/compra, que la 2.9.x ignora (ver jsonOperacion).
+void Stock::asegurarColumnasOperaciones()
+{
+    QSet<QString> cols;
+    {
+        QSqlQuery q = consulta(db_, "PRAGMA table_info(operaciones)");
+        while (q.next()) cols.insert(q.value("name").toString());
+    }
+    static const QList<QPair<QString, QString>> nuevas = {
+        {QStringLiteral("anulada"), QStringLiteral("TEXT NOT NULL DEFAULT ''")},
+        {QStringLiteral("medio_pago"), QStringLiteral("TEXT NOT NULL DEFAULT ''")},
+        {QStringLiteral("cliente"), QStringLiteral("TEXT NOT NULL DEFAULT ''")},
+        {QStringLiteral("descuento"), QStringLiteral("REAL NOT NULL DEFAULT 0")},
+    };
+    bool falta = false;
+    for (const auto& n : nuevas) if (!cols.contains(n.first)) falta = true;
+    if (!falta) return;
+    Transaccion t(db_);
+    for (const auto& [nombre, definicion] : nuevas)
+        if (!cols.contains(nombre)) consulta(db_, QStringLiteral("ALTER TABLE operaciones ADD COLUMN %1 %2").arg(nombre, definicion));
     t.confirmar();
 }
 
@@ -752,6 +779,19 @@ std::optional<Producto> Stock::obtenerPorUuid(const QString& uuid) const
     }
 }
 
+std::optional<Producto> Stock::obtenerPorCodigo(const QString& codigo) const
+{
+    const QString c = codigo.trimmed();
+    if (c.isEmpty()) return std::nullopt;
+    try {
+        const QVariant id = valor(db_, "SELECT id FROM productos WHERE codigo = ? AND borrado = 0", {c});
+        if (!id.isValid()) return std::nullopt;
+        return obtener(id.toLongLong());
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}
+
 QStringList Stock::categorias() const { return distintos("categoria"); }
 QStringList Stock::proveedores() const { return distintos("proveedor"); }
 
@@ -834,6 +874,49 @@ Resultado Stock::eliminar(qint64 id)
         return {true, QString(), id};
     } catch (const std::exception& e) {
         return {false, QString::fromUtf8(e.what()), 0};
+    }
+}
+
+// «Deshacer» después de eliminar: el producto vuelve con los datos que tenía (p es como estaba antes de eliminarlo).
+// Su stock sale solo, porque las ventas, compras y ajustes nunca se borraron. Se marca como un cambio nuevo:
+// el otro dispositivo lo vuelve a mostrar aunque ya se hubiera enterado del borrado (también la 2.9.x).
+Resultado Stock::restaurar(const Producto& p)
+{
+    try {
+        Transaccion t(db_);
+        QSqlQuery q = consulta(db_, "SELECT id, uuid FROM productos WHERE id = ? AND borrado = 1", {p.id});
+        bool hay = q.next();
+        if (!hay && !p.uuid.isEmpty()) {
+            q = consulta(db_, "SELECT id, uuid FROM productos WHERE uuid = ? AND borrado = 1", {p.uuid});
+            hay = q.next();
+        }
+        if (!hay) return {false, QStringLiteral("El producto no se puede recuperar."), p.id};
+        const qint64 id = q.value(0).toLongLong();
+        const QString uuid = q.value(1).toString();
+        // El código vuelve si mientras tanto no lo tomó otro producto
+        QString codigo = p.codigo.trimmed();
+        if (!codigo.isEmpty() && valor(db_, "SELECT COUNT(*) FROM productos WHERE codigo = ? AND borrado = 0", {codigo}).toInt() > 0)
+            codigo.clear();
+        consulta(db_,
+            "UPDATE productos SET borrado = 0, codigo = ?, nombre = ?, categoria = ?, stock_minimo = ?, proveedor = ?, vencimiento = ?, "
+            "medida_bolsa = ?, notas = ? WHERE id = ?",
+            {textoONulo(codigo), texto(p.nombre), texto(p.categoria), p.stockMinimo, texto(p.proveedor), textoONulo(p.vencimiento),
+             texto(p.medidaBolsa), texto(p.notas), id});
+        marcar("productos", id);
+        guardarPrecios(db_, id, p.precios);
+        // Lo de las columnas propias que ya no encaja (se borró la columna o le cambiaron el tipo) se deja afuera
+        QHash<QString, QString> extra;
+        for (const Columna& c : columnas()) {
+            QString guardado;
+            if (c.propia() && p.extra.contains(c.uuid) && normalizarValorColumna(c.tipo, p.extra.value(c.uuid), &guardado))
+                extra.insert(c.uuid, p.extra.value(c.uuid));
+        }
+        guardarExtras(db_, id, extra);
+        recalcularCantidad(uuid);
+        t.confirmar();
+        return {true, QString(), id};
+    } catch (const std::exception& e) {
+        return {false, mensajeDeError(e), p.id};
     }
 }
 

@@ -75,12 +75,19 @@ public:
     Resultado crear(const Producto& p);              // p.cantidad es el stock inicial; error si el código ya existe
     Resultado actualizar(const Producto& p);         // todo menos la cantidad (para eso: fijarCantidad)
     Resultado eliminar(qint64 id);
+    Resultado restaurar(const Producto& p);         // deshace eliminar con los datos que tenía (también llega al otro dispositivo)
+    std::optional<Producto> obtenerPorCodigo(const QString& codigo) const;   // el código exacto (lector de códigos de barras)
     Resultado fijarCantidad(qint64 id, int cantidad);  // corrección manual: queda anotada como un movimiento de stock
     Resultado ajustar(qint64 id, int delta);         // lo mismo, sumando o restando
 
     // ---- ventas y compras: todo o nada
-    ResultadoOperacion registrarOperacion(TipoOperacion tipo, const QList<LineaOperacion>& lineas);
-    QList<Operacion> operaciones(int limite = 100) const;
+    // datos: medio de pago, cliente y descuento (solo en las ventas; en las compras se ignoran)
+    ResultadoOperacion registrarOperacion(TipoOperacion tipo, const QList<LineaOperacion>& lineas, const DatosVenta& datos = {});
+    QList<Operacion> operaciones(int limite = 100) const;                    // las últimas, de la más nueva a la más vieja
+    QList<Operacion> operaciones(const FiltroOperaciones& filtro) const;     // historial: por tipo y fechas
+    // Anular (también sirve para una devolución): devuelve el stock con movimientos inversos y la deja marcada como
+    // anulada; no se borra. Los reportes ya no la cuentan. Todo o nada.
+    Resultado anularOperacion(qint64 id);
 
     // ---- reportes y avisos
     Reporte reporte(const QDate& desde, const QDate& hasta) const;     // ventas, compras y ganancia del período
@@ -92,6 +99,10 @@ public:
     QPair<int, int> importar(const QList<ProductoImportado>& productos);                         // (nuevos, actualizados)
 
     Resultado backup(const QString& destino);
+    // Copia automática de cada día en backups/ (al lado de la base): automatica_AAAA-MM-DD.db. Si la del día ya
+    // está no hace nada; quedan las últimas «conservar» (las copias hechas a mano no se tocan). id = 1 si hizo una.
+    Resultado copiaDiaria(const QDate& hoy = QDate::currentDate(), int conservar = 7);
+    QString carpetaCopias() const;
 
     // ---- sincronización
     QString dispositivo() const override { return dispositivo_; }
@@ -113,6 +124,7 @@ private:
     void migrarDesdeEsquema3();                                   // 2.1.0 -> 2.2.0: uuid, marcas de cambio, columnas, movimientos
     void crearColumnasBase();
     void asegurarColumnaGanancia();
+    void asegurarColumnasOperaciones();                           // 2.10.0: anulada, medio de pago, cliente y descuento
     bool existeTabla(const QString& nombre) const;
     QString config(const QString& clave, const QString& porDefecto = QString()) const;
     void fijarConfigLocal(const QString& clave, const QString& valor);

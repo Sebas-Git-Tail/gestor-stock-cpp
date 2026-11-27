@@ -4,6 +4,7 @@
 #include "dialogooperacion.h"
 #include "dialogoproducto.h"
 #include "dialogoreportes.h"
+#include "dialogohistorial.h"
 #include "dialogosincronizacion.h"
 #include "importarexcel.h"
 #include "portapapeles.h"
@@ -38,6 +39,7 @@
 #include <QStandardItemModel>
 #include <QTextStream>
 #include <QTimer>
+#include <QRegularExpression>
 
 namespace {
 
@@ -73,12 +75,11 @@ ColoresFila colorFila(tema::Estado estado, double fuerza)
     return {mezclar(base, c, fuerza), mezclar(c, tema::oscuro() ? QColor(Qt::white) : QColor(Qt::black), 0.35)};
 }
 
-QString campoCsv(const QString& s)
+// ¿Lo que se escribió en el buscador parece un código de barras? (lo que manda un lector USB: sin espacios y con números)
+bool pareceCodigo(const QString& texto)
 {
-    if (!s.contains(QLatin1Char(';')) && !s.contains(QLatin1Char('"')) && !s.contains(QLatin1Char('\n'))) return s;
-    QString c = s;
-    c.replace(QLatin1Char('"'), QStringLiteral("\"\""));
-    return QLatin1Char('"') + c + QLatin1Char('"');
+    static const QRegularExpression patron(QStringLiteral(R"(^[0-9A-Za-z._\-]{4,}$)"));
+    return patron.match(texto).hasMatch() && texto.contains(QRegularExpression(QStringLiteral("[0-9]")));
 }
 
 } // namespace
@@ -98,6 +99,13 @@ VentanaPrincipal::VentanaPrincipal(Stock* stock, QSettings* ajustes, QWidget* pa
     restoreGeometry(ajustes_->value("ventana/geometria").toByteArray());
     refrescar();
     QTimer::singleShot(0, this, &VentanaPrincipal::restaurarPosicion);   // cuando la ventana ya tiene su tamaño final
+
+    // Copia automática de la base: una por día (quedan las últimas 7). Se revisa al rato de abrir y cada hora,
+    // por si la ventana queda abierta varios días
+    auto* copias = new QTimer(this);
+    connect(copias, &QTimer::timeout, this, [this] { stock_->copiaDiaria(); });
+    copias->start(60 * 60 * 1000);
+    QTimer::singleShot(5000, this, [this] { stock_->copiaDiaria(); });
 }
 
 VentanaPrincipal::~VentanaPrincipal() { armando_ = true; }   // al cerrar, los cambios de ancho de la tabla ya no se guardan
@@ -154,7 +162,8 @@ void VentanaPrincipal::armarMenu()
 void VentanaPrincipal::conectar()
 {
     connect(ui->inputBuscar, &QLineEdit::textChanged, this, &VentanaPrincipal::refrescar);
-    connect(ui->btnAgregar, &QPushButton::clicked, this, &VentanaPrincipal::agregar);
+    connect(ui->inputBuscar, &QLineEdit::returnPressed, this, [this] { codigoLeido(ui->inputBuscar->text().trimmed()); });
+    connect(ui->btnAgregar, &QPushButton::clicked, this, [this] { agregar(); });
     connect(ui->btnEditar, &QPushButton::clicked, this, &VentanaPrincipal::editar);
     connect(ui->btnEliminar, &QPushButton::clicked, this, &VentanaPrincipal::eliminar);
     connect(ui->btnVenta, &QPushButton::clicked, this, &VentanaPrincipal::venta);
@@ -168,6 +177,7 @@ void VentanaPrincipal::conectar()
     connect(ui->actionColumnas, &QAction::triggered, this, &VentanaPrincipal::columnas);
     connect(ui->actionSincronizar, &QAction::triggered, this, &VentanaPrincipal::abrirSincronizacion);
     connect(ui->actionReportes, &QAction::triggered, this, [this] { abrirReportes(false); });
+    connect(ui->actionHistorial, &QAction::triggered, this, &VentanaPrincipal::historial);
     connect(ui->labelAvisos, &QLabel::linkActivated, this, [this] { abrirReportes(true); });
     ui->tablaProductos->installEventFilter(this);   // Ctrl+C y Ctrl+V cuando la tabla tiene el foco
 
@@ -311,7 +321,6 @@ void VentanaPrincipal::restaurarPosicion()
 
 void VentanaPrincipal::closeEvent(QCloseEvent* evento)
 {
-    confirmarEliminados();
     guardarPosicion();
     evento->accept();
 }
@@ -347,7 +356,6 @@ void VentanaPrincipal::refrescar()
     int bajos = 0, vencidos = 0, porVencer = 0;
     int mostrados = 0;
     for (const Producto& p : productos) {
-        if (porEliminar_.contains(p.id)) continue;   // eliminado, esperando el «Deshacer»
         ++mostrados;
         const auto dias = conVence ? diasParaVencer(p.vencimiento) : std::nullopt;
         const EstadoVencimiento estado = conVence ? estadoVencimiento(p.vencimiento) : EstadoVencimiento::Ninguno;
@@ -440,10 +448,14 @@ void VentanaPrincipal::refrescar()
 
 // ====================================================================== acciones
 
-void VentanaPrincipal::agregar()
+void VentanaPrincipal::agregar() { agregar(QString()); }
+
+void VentanaPrincipal::agregar(const QString& codigo)
 {
     DialogoProducto dlg(stock_->categorias(), stock_->proveedores(), nullptr, this, stock_->columnas());
+    if (!codigo.isEmpty()) dlg.fijarCodigo(codigo);
     if (dlg.exec() != QDialog::Accepted) return;
+    if (!codigo.isEmpty()) ui->inputBuscar->clear();     // que se vea el producto nuevo en la lista completa
     const Resultado r = stock_->crear(dlg.resultado());          // la cantidad es el stock inicial
     if (!r.ok) {
         QMessageBox::warning(this, tr("No se pudo guardar"), r.error);
@@ -485,36 +497,52 @@ void VentanaPrincipal::eliminar()
         QMessageBox::information(this, tr("Elegí un producto"), tr("Seleccioná una fila de la tabla primero."));
         return;
     }
-    // Se esconden ya y se borran de verdad cuando se va el aviso (o al cerrar la ventana): hasta entonces,
-    // «Deshacer» los trae de vuelta tal cual estaban
-    confirmarEliminados();                        // lo de un borrado anterior, si quedaba
-    QString texto;
-    if (ids.size() == 1) {
-        const auto p = stock_->obtener(ids.first());
-        texto = tr("Se eliminó «%1».").arg(p ? p->nombre : QString());
-    } else {
-        texto = tr("Se eliminaron %1 productos.").arg(ids.size());
+    // Se borran ya (así el celular se entera aunque se cierre la ventana) y «Deshacer» los trae de vuelta
+    // con los datos que tenían (Stock::restaurar), como en el celular
+    QList<Producto> eliminados;
+    for (qint64 id : ids) {
+        const auto p = stock_->obtener(id);
+        if (p && stock_->eliminar(id).ok) eliminados << *p;
     }
-    for (qint64 id : ids) porEliminar_.insert(id);
     refrescar();
+    if (eliminados.isEmpty()) return;
+    const QString texto = eliminados.size() == 1 ? tr("Se eliminó «%1».").arg(eliminados.first().nombre)
+                                                 : tr("Se eliminaron %1 productos.").arg(eliminados.size());
     tema::OpcionesAviso opciones;
     opciones.milisegundos = 7000;
     opciones.textoBoton = tr("Deshacer");
-    opciones.alBoton = [this, ids] {
-        for (qint64 id : ids) porEliminar_.remove(id);
-        refrescar();
-        seleccionar(ids, ids.first());
-    };
-    opciones.alVencer = [this] { confirmarEliminados(); };
+    opciones.alBoton = [this, eliminados] { deshacerEliminar(eliminados); };
     tema::avisar(this, texto, opciones);
 }
 
-void VentanaPrincipal::confirmarEliminados()
+void VentanaPrincipal::deshacerEliminar(const QList<Producto>& eliminados)
 {
-    if (porEliminar_.isEmpty()) return;
-    const QSet<qint64> ids = std::exchange(porEliminar_, {});
-    for (qint64 id : ids) stock_->eliminar(id);
+    QList<qint64> recuperados;
+    QStringList errores;
+    for (const Producto& p : eliminados) {
+        const Resultado r = stock_->restaurar(p);
+        if (r.ok) recuperados << r.id;
+        else errores << QStringLiteral("«%1»: %2").arg(p.nombre, r.error);
+    }
     refrescar();
+    if (!recuperados.isEmpty()) seleccionar(recuperados, recuperados.first());
+    if (!errores.isEmpty()) QMessageBox::warning(this, tr("Deshacer"), errores.join(QLatin1Char('\n')));
+}
+
+void VentanaPrincipal::codigoLeido(const QString& codigo)
+{
+    // Un lector de códigos USB escribe el código y aprieta Enter. Si no es de ningún producto, se ofrece crearlo
+    if (!pareceCodigo(codigo) || stock_->obtenerPorCodigo(codigo) || !stock_->listar(codigo).isEmpty()) return;
+    QMessageBox caja(this);
+    caja.setIcon(QMessageBox::Question);
+    caja.setWindowTitle(tr("Código nuevo"));
+    caja.setText(tr("Ningún producto tiene el código «%1».").arg(codigo));
+    QPushButton* crear = caja.addButton(tr("Crear producto con este código"), QMessageBox::AcceptRole);
+    caja.addButton(tr("No"), QMessageBox::RejectRole);
+    caja.setDefaultButton(crear);
+    caja.exec();
+    if (caja.clickedButton() != crear) return;
+    agregar(codigo);
 }
 
 QString VentanaPrincipal::textoResumen() const
@@ -563,12 +591,14 @@ void VentanaPrincipal::armarEstilo()
         boton->setDefaultAction(accion);
         boton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
         boton->setText(accion->text().remove(QStringLiteral("…")).remove(QStringLiteral(" y avisos"))
-                           .remove(QStringLiteral(" con el celular")).remove(QStringLiteral(" de la tabla")));
+                           .remove(QStringLiteral(" con el celular")).remove(QStringLiteral(" de la tabla"))
+                           .remove(QStringLiteral(" de ventas y compras")));
         boton->setToolTip(accion->text());
         ui->layoutSuperior->insertWidget(ui->layoutSuperior->indexOf(ui->btnMenu), boton);
         return boton;
     };
     botonBarra(ui->actionReportes, QStringLiteral("grafico"));
+    botonBarra(ui->actionHistorial, QStringLiteral("reloj"));
     botonBarra(ui->actionSincronizar, QStringLiteral("sincronizar"));
     botonBarra(ui->actionColumnas, QStringLiteral("columnas"));
     ui->actionImportar->setIcon(tema::icono(QStringLiteral("subir")));
@@ -663,7 +693,7 @@ void VentanaPrincipal::operacion(TipoOperacion tipo)
     DialogoOperacion dlg(tipo, stock_->listar(), ids, this);    // dentro se pueden agregar más productos con el buscador
     if (dlg.exec() != QDialog::Accepted) return;
 
-    const ResultadoOperacion r = stock_->registrarOperacion(tipo, dlg.lineas());
+    const ResultadoOperacion r = stock_->registrarOperacion(tipo, dlg.lineas(), dlg.datosVenta());
     if (!r.ok) {
         QMessageBox::warning(this, tipo == TipoOperacion::Venta ? tr("No se pudo registrar la venta") : tr("No se pudo registrar la compra"),
                              r.error + QStringLiteral("\n\n") + tr("No se modificó el stock de ningún producto."));
@@ -729,30 +759,7 @@ void VentanaPrincipal::exportarCsv()
         QMessageBox::warning(this, tr("No se pudo exportar"), archivo.errorString());
         return;
     }
-    QTextStream out(&archivo);
-    out.setEncoding(QStringConverter::Utf8);
-    out.setGenerateByteOrderMark(true);           // para que Excel respete las tildes
-    const QList<Columna> propias = columnasPropias();
-    QStringList titulos = {QStringLiteral("Código"), QStringLiteral("Nombre"), QStringLiteral("Categoría"), QStringLiteral("Proveedor"),
-                           QStringLiteral("Cantidad"), QStringLiteral("Precios"), QStringLiteral("Medida bolsa"), QStringLiteral("Vencimiento"),
-                           QStringLiteral("Stock mínimo"), QStringLiteral("Notas")};
-    for (const Columna& c : propias) titulos << c.nombre;
-    QStringList titulosCsv;
-    for (const QString& tt : titulos) titulosCsv << campoCsv(tt);
-    out << titulosCsv.join(QLatin1Char(';')) << "\n";
-    for (const Producto& p : stock_->listar()) {
-        QStringList precios;
-        for (const Precio& pr : p.precios)
-            precios << (pr.presentacion.isEmpty() ? QString::number(pr.precio, 'g', 15)
-                                                  : pr.presentacion + QStringLiteral(": ") + QString::number(pr.precio, 'g', 15));
-        QStringList campos = {p.codigo, p.nombre, p.categoria, p.proveedor, QString::number(p.cantidad),
-                              precios.join(QStringLiteral(" | ")), p.medidaBolsa, p.vencimiento,
-                              QString::number(p.stockMinimo), p.notas};
-        for (const Columna& c : propias) campos << textoValorColumna(c.tipo, p.extra.value(c.uuid));
-        QStringList salida;
-        for (const QString& c : campos) salida << campoCsv(c);
-        out << salida.join(QLatin1Char(';')) << "\n";
-    }
+    archivo.write(csvDeProductos(stock_->listar(), columnasPropias()));   // el mismo CSV que en el celular (nucleo/util)
     statusBar()->showMessage(tr("Exportado en %1").arg(ruta), 5000);
 }
 
@@ -1026,6 +1033,13 @@ void VentanaPrincipal::abrirSincronizacion()
 {
     DialogoSincronizacion dlg(*stock_, *servidor_, ajustes_, this);
     dlg.exec();
+}
+
+void VentanaPrincipal::historial()
+{
+    DialogoHistorial dialogo(*stock_, this);
+    dialogo.exec();
+    if (dialogo.huboCambios()) refrescar();       // se anuló algo: cambió el stock
 }
 
 void VentanaPrincipal::abrirReportes(bool avisos)

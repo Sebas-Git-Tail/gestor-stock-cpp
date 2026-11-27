@@ -727,6 +727,218 @@ private slots:
         QCOMPARE(a.at(3).tipo, Alerta::Tipo::PorVencer);
         QCOMPARE(s.alertas(3, hoy).size(), 3);                // el queso todavía no
     }
+    // ---------------------------------------------------------------- 2.10.0: historial, anular, deshacer, copias
+    void anularVentaDevuelveElStockYNoCuentaEnReportes()
+    {
+        Stock s(":memory:");
+        const qint64 avena = s.crear(producto("Avena", 10, {{"500 g", 100}})).id;
+        const ResultadoOperacion venta = s.registrarOperacion(TipoOperacion::Venta, {{avena, 3, "500 g", 100}});
+        QVERIFY(venta.ok);
+        QCOMPARE(s.obtener(avena)->cantidad, 7);
+        const QDate hoy = QDate::currentDate();
+        QCOMPARE(s.reporte(hoy, hoy).ventas, 300.0);
+
+        QVERIFY(s.anularOperacion(venta.id).ok);
+        QCOMPARE(s.obtener(avena)->cantidad, 10);                 // volvió al stock
+        const Reporte r = s.reporte(hoy, hoy);
+        QCOMPARE(r.ventas, 0.0);                                   // y ya no cuenta
+        QCOMPARE(r.cantidadVentas, 0);
+        QVERIFY(r.masVendidos.isEmpty());
+        const QList<Operacion> ops = s.operaciones();
+        QCOMPARE(ops.size(), 1);                                   // no se borra: queda marcada
+        QVERIFY(ops.first().estaAnulada());
+        QVERIFY(!s.anularOperacion(venta.id).ok);                  // dos veces no
+        QCOMPARE(s.obtener(avena)->cantidad, 10);
+        QVERIFY(!s.anularOperacion(9999).ok);
+    }
+
+    void anularCompraNoDejaElStockNegativo()
+    {
+        Stock s(":memory:");
+        const qint64 avena = s.crear(producto("Avena", 0, {})).id;
+        const qint64 compra = s.registrarOperacion(TipoOperacion::Compra, {{avena, 5, QString(), 80}}).id;
+        QCOMPARE(s.costoPromedio(avena), 80.0);
+        const qint64 venta = s.registrarOperacion(TipoOperacion::Venta, {{avena, 4, QString(), 100}}).id;
+        QCOMPARE(s.obtener(avena)->cantidad, 1);
+        const Resultado r = s.anularOperacion(compra);             // ya se vendieron 4 de los 5
+        QVERIFY(!r.ok);
+        QVERIFY2(r.error.contains("Avena"), qPrintable(r.error));
+        QCOMPARE(s.obtener(avena)->cantidad, 1);                   // no se tocó nada
+        QVERIFY(!s.operaciones().last().estaAnulada());
+        QVERIFY(s.anularOperacion(venta).ok);                      // primero la venta (una devolución)
+        QVERIFY(s.anularOperacion(compra).ok);
+        QCOMPARE(s.obtener(avena)->cantidad, 0);
+        QCOMPARE(s.costoPromedio(avena), 0.0);                     // la compra anulada ya no da el costo
+    }
+
+    void historialPorTipoYFechas()
+    {
+        Stock s(":memory:");
+        const qint64 avena = s.crear(producto("Avena", 10, {{"", 100}})).id;
+        const qint64 v1 = s.registrarOperacion(TipoOperacion::Venta, {{avena, 1, QString(), 100}}).id;
+        s.registrarOperacion(TipoOperacion::Compra, {{avena, 2, QString(), 0}});
+        s.registrarOperacion(TipoOperacion::Venta, {{avena, 2, QString(), 100}, {avena, 1, QString(), 90}});
+        QVERIFY(s.anularOperacion(v1).ok);
+        const QDate hoy = QDate::currentDate();
+
+        FiltroOperaciones f;
+        QCOMPARE(s.operaciones(f).size(), 3);
+        f.tipo = TipoOperacion::Venta;
+        QCOMPARE(s.operaciones(f).size(), 2);
+        f.conAnuladas = false;
+        const QList<Operacion> vigentes = s.operaciones(f);
+        QCOMPARE(vigentes.size(), 1);
+        QCOMPARE(vigentes.first().items.size(), 2);                // con el detalle
+        QCOMPARE(vigentes.first().items.first().productoUuid, s.obtener(avena)->uuid);
+        QCOMPARE(vigentes.first().total, 290.0);
+        f = FiltroOperaciones{};
+        f.tipo = TipoOperacion::Compra;
+        QCOMPARE(s.operaciones(f).size(), 1);
+        f = FiltroOperaciones{};
+        f.desde = hoy.addDays(1);
+        QCOMPARE(s.operaciones(f).size(), 0);
+        f.desde = hoy;
+        f.hasta = hoy;
+        QCOMPARE(s.operaciones(f).size(), 3);
+        f.desde = QDate();
+        f.hasta = hoy.addDays(-1);
+        QCOMPARE(s.operaciones(f).size(), 0);
+        f = FiltroOperaciones{};
+        f.limite = 2;
+        QCOMPARE(s.operaciones(f).size(), 2);
+    }
+
+    void ventaConMedioDePagoClienteYDescuento()
+    {
+        Stock s(":memory:");
+        const qint64 avena = s.crear(producto("Avena", 10, {{"", 1000}})).id;
+        QVERIFY(!s.registrarOperacion(TipoOperacion::Venta, {{avena, 2, QString(), 1000}}, {"Efectivo", "", 2500}).ok);   // más que el total
+        QVERIFY(!s.registrarOperacion(TipoOperacion::Venta, {{avena, 2, QString(), 1000}}, {"", "", -1}).ok);
+        QCOMPARE(s.obtener(avena)->cantidad, 10);
+        const ResultadoOperacion r = s.registrarOperacion(TipoOperacion::Venta, {{avena, 2, QString(), 1000}}, {" Efectivo ", "Juana  Pérez", 500});
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QCOMPARE(r.total, 1500.0);
+        const Operacion o = s.operaciones().first();
+        QCOMPARE(o.medioPago, QString("Efectivo"));
+        QCOMPARE(o.cliente, QString("Juana Pérez"));
+        QCOMPARE(o.descuento, 500.0);
+        QCOMPARE(o.total, 1500.0);
+        const QDate hoy = QDate::currentDate();
+        const Reporte rep = s.reporte(hoy, hoy);
+        QCOMPARE(rep.ventas, 1500.0);
+        QCOMPARE(rep.masVendidos.first().importe, 1500.0);         // el descuento se reparte en lo vendido
+        // En la compra no hay descuento ni medio de pago
+        QVERIFY(s.registrarOperacion(TipoOperacion::Compra, {{avena, 1, QString(), 300}}, {"Efectivo", "X", 100}).ok);
+        const Operacion compra = s.operaciones().first();
+        QCOMPARE(compra.total, 300.0);
+        QVERIFY(compra.medioPago.isEmpty());
+        QCOMPARE(compra.descuento, 0.0);
+    }
+
+    void restaurarDeshaceEliminar()
+    {
+        Stock s(":memory:");
+        const QString marca = s.columna(s.agregarColumna("Marca", TipoColumna::Texto).id)->uuid;
+        Producto p = producto("Avena", 5, {{"500 g", 1900}, {"1 kg", 3500}}, "779123");
+        p.extra.insert(marca, "Sol");
+        p.notas = "fina";
+        const qint64 id = s.crear(p).id;
+        QVERIFY(s.registrarOperacion(TipoOperacion::Venta, {{id, 2, "500 g", 1900}}).ok);
+        const Producto antes = *s.obtener(id);
+        QVERIFY(s.eliminar(id).ok);
+        QVERIFY(!s.obtener(id));
+        QVERIFY(s.listar().isEmpty());
+
+        const Resultado r = s.restaurar(antes);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QCOMPARE(r.id, id);
+        const auto despues = s.obtener(id);
+        QVERIFY(despues);
+        QCOMPARE(despues->uuid, antes.uuid);
+        QCOMPARE(despues->codigo, QString("779123"));
+        QCOMPARE(despues->cantidad, 3);                            // el stock sale de los movimientos, que no se borraron
+        QCOMPARE(despues->precios.size(), 2);
+        QCOMPARE(despues->extra.value(marca), QString("Sol"));
+        QCOMPARE(despues->notas, QString("fina"));
+        QVERIFY(!s.restaurar(antes).ok);                           // ya no está eliminado
+
+        // Si mientras tanto otro producto tomó el código, vuelve sin código
+        QVERIFY(s.eliminar(id).ok);
+        QVERIFY(s.crear(producto("Otra avena", 0, {}, "779123")).ok);
+        QVERIFY(s.restaurar(antes).ok);
+        QVERIFY(s.obtener(id)->codigo.isEmpty());
+    }
+
+    void obtenerPorCodigoExacto()
+    {
+        Stock s(":memory:");
+        const qint64 id = s.crear(producto("Avena", 1, {}, "779123")).id;
+        QCOMPARE(s.obtenerPorCodigo(" 779123 ")->id, id);
+        QVERIFY(!s.obtenerPorCodigo("77912"));                     // un pedazo no alcanza
+        QVERIFY(!s.obtenerPorCodigo(""));
+        QVERIFY(s.eliminar(id).ok);
+        QVERIFY(!s.obtenerPorCodigo("779123"));
+    }
+
+    void copiaDiariaGuardaLasUltimasSiete()
+    {
+        QTemporaryDir dir;
+        Stock s(dir.filePath("stock.db"));
+        QVERIFY(s.crear(producto("Avena", 3, {})).ok);
+        QVERIFY(s.backup(dir.filePath("backups/stock_20261101_100000.db")).ok);   // una hecha a mano
+        const QDate inicio(2026, 11, 1);
+        for (int i = 0; i < 9; ++i) {
+            const Resultado r = s.copiaDiaria(inicio.addDays(i));
+            QVERIFY2(r.ok, qPrintable(r.error));
+            QCOMPARE(r.id, qint64(1));
+        }
+        QCOMPARE(s.copiaDiaria(inicio.addDays(8)).id, qint64(0));  // la del día ya está
+        const QDir copias(s.carpetaCopias());
+        const QStringList automaticas = copias.entryList({"automatica_*"}, QDir::Files, QDir::Name);
+        QCOMPARE(automaticas.size(), 7);
+        QCOMPARE(automaticas.first(), QString("automatica_2026-11-03.db"));
+        QCOMPARE(automaticas.last(), QString("automatica_2026-11-09.db"));
+        QVERIFY(copias.exists("stock_20261101_100000.db"));        // las hechas a mano no se tocan
+        {
+            Stock copia(copias.filePath(automaticas.last()));      // y la copia se abre con sus datos
+            QVERIFY(copia.abierta());
+            QCOMPARE(copia.listar().size(), 1);
+        }
+        Stock memoria(":memory:");
+        QCOMPARE(memoria.copiaDiaria().id, qint64(0));
+    }
+
+    void columnasNuevasSinCambiarElEsquema()
+    {
+        // La 2.9.x tiene que poder seguir abriendo la base: el número de esquema no cambia
+        QTemporaryDir dir;
+        const QString ruta = dir.filePath("v21.db");
+        crearBaseDe2_1(ruta);
+        {
+            Stock s(ruta);
+            QVERIFY(s.abierta());
+            const qint64 avena = s.listar().first().id;
+            QVERIFY(s.registrarOperacion(TipoOperacion::Venta, {{avena, 1, QString(), 100}}, {"Débito", "", 10}).ok);
+            QVERIFY(s.anularOperacion(s.operaciones().first().id).ok);
+        }
+        {
+            QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "esquema");
+            db.setDatabaseName(ruta);
+            QVERIFY(db.open());
+            QSqlQuery q(db);
+            QVERIFY(q.exec("PRAGMA user_version") && q.next());
+            QCOMPARE(q.value(0).toInt(), Stock::VERSION_ESQUEMA);
+            QCOMPARE(Stock::VERSION_ESQUEMA, 4);
+            // lo que hace la 2.9.x al registrar una venta (sin las columnas nuevas) sigue andando
+            QVERIFY2(q.exec("INSERT INTO operaciones (uuid, tipo, fecha, total) VALUES ('vieja', 'venta', '2026-11-26T10:00:00', 5)"),
+                     qPrintable(q.lastError().text()));
+            db.close();
+        }
+        QSqlDatabase::removeDatabase("esquema");
+        Stock s(ruta);
+        QVERIFY(s.abierta());
+        QCOMPARE(s.operaciones().size(), 4);
+    }
 };
 
 QTEST_MAIN(TstDb)

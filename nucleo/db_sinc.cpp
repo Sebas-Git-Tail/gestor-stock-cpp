@@ -21,6 +21,9 @@ using namespace dbi;
 //   {"t":"aj","u":uuid,"mod":ms,"aut":disp,"pu":uuidProducto,"d":-3,"f":"2026-11-01T10:00:00","m":"Corrección manual"}
 //   {"t":"op","u":uuid,"mod":ms,"aut":disp,"tp":"venta","f":"...","tot":1234.5,
 //    "it":[{"pu":uuidProducto,"n":"Avena","pr":"500 g","c":2,"pv":4000.0}]}
+//   Desde la 2.10.0 «op» puede traer además (solo si tienen valor): "anul":"2026-11-26T10:00:00" (cuándo se anuló),
+//   "mp":"Efectivo" (medio de pago), "cli":"Juana" (cliente) y "desc":500.0 (descuento, ya restado de "tot").
+//   Las versiones anteriores los ignoran; el stock de una anulación viaja como ajustes («aj»), que sí entienden.
 
 QJsonObject Stock::jsonColumna(qint64 id) const
 {
@@ -69,10 +72,15 @@ QJsonObject Stock::jsonAjuste(qint64 id) const
 
 QJsonObject Stock::jsonOperacion(qint64 id) const
 {
-    QSqlQuery q = consulta(db_, "SELECT uuid, modificado, autor, tipo, fecha, total FROM operaciones WHERE id = ?", {id});
+    QSqlQuery q = consulta(db_, "SELECT uuid, modificado, autor, tipo, fecha, total, anulada, medio_pago, cliente, descuento "
+                                "FROM operaciones WHERE id = ?", {id});
     if (!q.next()) return {};
     QJsonObject o{{"t", "op"}, {"u", q.value(0).toString()}, {"mod", q.value(1).toLongLong()}, {"aut", q.value(2).toString()},
                   {"tp", q.value(3).toString()}, {"f", q.value(4).toString()}, {"tot", q.value(5).toDouble()}};
+    if (!q.value(6).toString().isEmpty()) o.insert(QStringLiteral("anul"), q.value(6).toString());
+    if (!q.value(7).toString().isEmpty()) o.insert(QStringLiteral("mp"), q.value(7).toString());
+    if (!q.value(8).toString().isEmpty()) o.insert(QStringLiteral("cli"), q.value(8).toString());
+    if (q.value(9).toDouble() > 0) o.insert(QStringLiteral("desc"), q.value(9).toDouble());
     QJsonArray items;
     QSqlQuery i = consulta(db_, "SELECT producto_uuid, nombre, presentacion, cantidad, precio_unitario FROM operacion_items "
                                 "WHERE operacion_id = ? ORDER BY id", {id});
@@ -252,11 +260,24 @@ ResultadoAplicar Stock::aplicarCambios(const QJsonArray& filas)
                     }
                     r.aceptadas << uuid;
                 } else {
-                    if (!valor(db_, "SELECT id FROM operaciones WHERE uuid = ?", {uuid}).isValid()) {
+                    const QString anulada = o.value(QLatin1String("anul")).toString();
+                    QSqlQuery existente = consulta(db_, "SELECT id, anulada FROM operaciones WHERE uuid = ?", {uuid});
+                    if (existente.next()) {
+                        // Las ventas y compras no cambian nunca, salvo para quedar anuladas (2.10.0). El stock no se
+                        // toca acá: lo devuelven los ajustes de la anulación, que llegan aparte
+                        if (!anulada.isEmpty() && existente.value(1).toString().isEmpty()) {
+                            consulta(db_, "UPDATE operaciones SET anulada = ?, modificado = ?, autor = ?, cambio = ? WHERE id = ?",
+                                     {anulada, mod, aut, siguienteCambio(), existente.value(0)});
+                            ++r.aplicadas;
+                        }
+                    } else {
                         const QString tipo = o.value(QLatin1String("tp")).toString() == QLatin1String("compra") ? QStringLiteral("compra") : QStringLiteral("venta");
-                        QSqlQuery q = consulta(db_, "INSERT INTO operaciones (uuid, tipo, fecha, total, modificado, autor, cambio) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        QSqlQuery q = consulta(db_, "INSERT INTO operaciones (uuid, tipo, fecha, total, anulada, medio_pago, cliente, descuento, "
+                                                    "modificado, autor, cambio) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                                {uuid, tipo, texto(o.value(QLatin1String("f")).toString()), o.value(QLatin1String("tot")).toDouble(),
-                                                mod, aut, siguienteCambio()});
+                                                texto(anulada), texto(o.value(QLatin1String("mp")).toString()),
+                                                texto(o.value(QLatin1String("cli")).toString()),
+                                                qMax(0.0, o.value(QLatin1String("desc")).toDouble()), mod, aut, siguienteCambio()});
                         const qint64 idOperacion = q.lastInsertId().toLongLong();
                         for (const QJsonValue& iv : o.value(QLatin1String("it")).toArray()) {
                             const QJsonObject io = iv.toObject();

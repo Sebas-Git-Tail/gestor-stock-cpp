@@ -3,6 +3,7 @@
 #include "util.h"
 
 #include <QDate>
+#include <QFile>
 #include <QJSEngine>
 #include <QLocale>
 #include <QPointer>
@@ -12,6 +13,8 @@
 #include <QJniObject>
 #endif
 #include <QQmlEngine>
+#include <QSaveFile>
+#include <QStandardPaths>
 #include <algorithm>
 
 namespace {
@@ -24,6 +27,23 @@ TipoColumna tipoDeIndice(int i)
 }
 
 QString numeroPlano(double v) { return formatearNumero(v); }
+
+// Lo que eligió la persona para guardar: un archivo común (PC) o content://… (Android, el selector de archivos)
+QString escribirArchivo(const QUrl& url, const QByteArray& datos)
+{
+    if (url.isLocalFile()) {
+        QSaveFile f(url.toLocalFile());
+        if (!f.open(QIODevice::WriteOnly)) return f.errorString();
+        f.write(datos);
+        return f.commit() ? QString() : f.errorString();
+    }
+    QFile f(url.toString());                    // content:// (Android): se escribe directo
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return f.errorString();
+    if (f.write(datos) != datos.size()) return f.errorString();
+    return QString();
+}
+
+QDate fechaDeIso(const QString& iso) { return QDate::fromString(iso.left(10), Qt::ISODate); }
 
 } // namespace
 
@@ -64,6 +84,12 @@ Controlador::Controlador(Stock& stock, QObject* parent)
         sincEnSilencio_ = true;
         sincronizar();
     });
+
+    // Copia automática de la base, una por día (quedan las últimas 7, en la carpeta de datos de la app):
+    // al rato de abrir y cada hora, por si la app queda abierta varios días
+    connect(&temporizadorCopia_, &QTimer::timeout, this, [this] { stock_.copiaDiaria(); });
+    temporizadorCopia_.start(60 * 60 * 1000);
+    QTimer::singleShot(5000, this, [this] { stock_.copiaDiaria(); });
     refrescar();
 }
 
@@ -219,7 +245,25 @@ QString Controlador::guardarProducto(const QVariantMap& d)
 
 QString Controlador::eliminarProducto(qint64 id)
 {
-    return resultado(stock_.eliminar(id));
+    // Como en ingresos-gastos: se borra ya (y le llega a la PC) y «Deshacer» lo trae de vuelta con sus datos
+    const auto antes = stock_.obtener(id);
+    const QString error = resultado(stock_.eliminar(id));
+    if (error.isEmpty() && antes) ultimoEliminado_ = *antes;
+    return error;
+}
+
+QString Controlador::deshacerEliminar()
+{
+    if (!ultimoEliminado_) return QStringLiteral("No hay nada para deshacer.");
+    const Producto p = *ultimoEliminado_;
+    ultimoEliminado_.reset();
+    return resultado(stock_.restaurar(p));
+}
+
+qint64 Controlador::idPorCodigo(const QString& codigo) const
+{
+    const auto p = stock_.obtenerPorCodigo(codigo);
+    return p ? p->id : 0;
 }
 
 QVariantList Controlador::buscarProductos(const QString& texto) const
@@ -275,8 +319,16 @@ QString Controlador::moverColumna(qint64 id, int delta)
 
 // ---------------------------------------------------------------- ventas y compras
 
-QVariantMap Controlador::registrarOperacion(bool venta, const QVariantList& lineas)
+QVariantMap Controlador::registrarOperacion(bool venta, const QVariantList& lineas, const QVariantMap& datos)
 {
+    DatosVenta extra;
+    if (venta) {
+        extra.medioPago = datos.value(QStringLiteral("medioPago")).toString().simplified();
+        extra.cliente = datos.value(QStringLiteral("cliente")).toString().simplified();
+        const QString d = datos.value(QStringLiteral("descuento")).toString().trimmed();
+        if (!d.isEmpty() && !parsearPrecio(d, &extra.descuento))
+            return QVariantMap{{"ok", false}, {"error", QStringLiteral("El descuento «%1» no es un número válido.").arg(d)}};
+    }
     QList<LineaOperacion> ls;
     for (const QVariant& v : lineas) {
         const QVariantMap m = v.toMap();
@@ -293,11 +345,97 @@ QVariantMap Controlador::registrarOperacion(bool venta, const QVariantList& line
         l.precioUnitario = precio;
         ls << l;
     }
-    const ResultadoOperacion r = stock_.registrarOperacion(venta ? TipoOperacion::Venta : TipoOperacion::Compra, ls);
+    const ResultadoOperacion r = stock_.registrarOperacion(venta ? TipoOperacion::Venta : TipoOperacion::Compra, ls, extra);
     if (!r.ok) return QVariantMap{{"ok", false}, {"error", r.error + QStringLiteral(" No se modificó el stock de ningún producto.")}};
     refrescar();
     programarSincronizacion();
     return QVariantMap{{"ok", true}, {"error", QString()}, {"total", formatearPrecio(r.total)}};
+}
+
+// ---------------------------------------------------------------- historial
+
+QVariantList Controlador::historial(int tipo, const QString& desde, const QString& hasta, bool conAnuladas) const
+{
+    FiltroOperaciones f;
+    if (tipo == 1) f.tipo = TipoOperacion::Venta;
+    else if (tipo == 2) f.tipo = TipoOperacion::Compra;
+    f.desde = fechaDeIso(desde);
+    f.hasta = fechaDeIso(hasta);
+    if (f.desde.isValid() && f.hasta.isValid() && f.desde > f.hasta) std::swap(f.desde, f.hasta);
+    f.conAnuladas = conAnuladas;
+    QVariantList lista;
+    for (const Operacion& o : stock_.operaciones(f)) {
+        const bool venta = o.tipo == TipoOperacion::Venta;
+        QStringList resumen;
+        QVariantList items;
+        for (const ItemOperacion& i : o.items) {
+            resumen << QStringLiteral("%1 ×%2").arg(i.nombre).arg(i.cantidad);
+            items << QVariantMap{{"texto", (i.presentacion.isEmpty() ? i.nombre : i.nombre + QStringLiteral(" — ") + i.presentacion)
+                                               + (i.precioUnitario > 0 ? QStringLiteral(": %1 × %2").arg(i.cantidad).arg(formatearPrecio(i.precioUnitario))
+                                                                       : QStringLiteral(": ×%1").arg(i.cantidad))},
+                                 {"subtotal", i.precioUnitario > 0 ? formatearPrecio(i.cantidad * i.precioUnitario) : QString()}};
+        }
+        if (o.descuento > 0) items << QVariantMap{{"texto", QStringLiteral("Descuento")}, {"subtotal", QStringLiteral("− ") + formatearPrecio(o.descuento)}};
+        QStringList datos;
+        if (!o.cliente.isEmpty()) datos << QStringLiteral("Cliente: %1").arg(o.cliente);
+        if (!o.medioPago.isEmpty()) datos << o.medioPago;
+        const QDateTime cuando = QDateTime::fromString(o.fecha, Qt::ISODate);
+        lista << QVariantMap{
+            {"id", o.id}, {"venta", venta}, {"tipo", venta ? QStringLiteral("Venta") : QStringLiteral("Compra")},
+            {"fecha", cuando.isValid() ? cuando.toString(QStringLiteral("dd/MM/yyyy HH:mm")) : o.fecha},
+            {"total", venta || o.total > 0 ? formatearPrecio(o.total) : QString()},
+            {"resumen", resumen.join(QStringLiteral(", "))}, {"datos", datos.join(QStringLiteral(" · "))}, {"items", items},
+            {"anulada", o.estaAnulada()},
+            {"estado", o.estaAnulada() ? QStringLiteral("Anulada el %1").arg(fechaCorta(o.anulada)) : QString()}};
+    }
+    return lista;
+}
+
+QString Controlador::anularOperacion(qint64 id)
+{
+    return resultado(stock_.anularOperacion(id));
+}
+
+// ---------------------------------------------------------------- archivos
+
+QString Controlador::fechaCorta(const QString& iso) const
+{
+    const QDate d = fechaDeIso(iso);
+    return d.isValid() ? d.toString(QStringLiteral("dd/MM/yyyy")) : QString();
+}
+
+QString Controlador::exportar(const QUrl& archivo)
+{
+    QList<Columna> propias;
+    for (const Columna& c : stock_.columnas()) if (c.propia()) propias << c;
+    const QList<Producto> productos = stock_.listar();
+    const QString error = escribirArchivo(archivo, csvDeProductos(productos, propias));   // el mismo CSV que en la PC
+    if (error.isEmpty()) emit aviso(QStringLiteral("Exportado: %1 productos").arg(productos.size()));
+    return error;
+}
+
+QString Controlador::backup(const QUrl& archivo)
+{
+    const QString temporal = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/copia-temporal.db");
+    const Resultado r = stock_.backup(temporal);
+    if (!r.ok) return r.error;
+    QFile f(temporal);
+    if (!f.open(QIODevice::ReadOnly)) return f.errorString();
+    const QString error = escribirArchivo(archivo, f.readAll());
+    f.close();
+    QFile::remove(temporal);
+    if (error.isEmpty()) emit aviso(QStringLiteral("Copia de seguridad guardada"));
+    return error;
+}
+
+QString Controlador::nombreExportacion() const
+{
+    return QStringLiteral("stock-%1.csv").arg(QDate::currentDate().toString(Qt::ISODate));
+}
+
+QString Controlador::nombreBackup() const
+{
+    return QStringLiteral("stock-%1.db").arg(QDate::currentDate().toString(Qt::ISODate));
 }
 
 // ---------------------------------------------------------------- sincronización
@@ -408,7 +546,7 @@ QString Controlador::resumenAlertas() const
     return partes.join(QStringLiteral(" · "));
 }
 
-QVariantMap Controlador::reporte(int periodo) const
+QVariantMap Controlador::rangoPeriodo(int periodo) const
 {
     const QDate hoy = QDate::currentDate();
     QDate desde = hoy, hasta = hoy;
@@ -419,6 +557,26 @@ QVariantMap Controlador::reporte(int periodo) const
     case 4: desde = QDate(hoy.year(), 1, 1); break;
     default: break;
     }
+    return QVariantMap{{"desde", desde.toString(Qt::ISODate)}, {"hasta", hasta.toString(Qt::ISODate)}};
+}
+
+QVariantMap Controlador::reporte(int periodo) const
+{
+    const QVariantMap rango = rangoPeriodo(periodo);
+    return armarReporte(fechaDeIso(rango.value(QStringLiteral("desde")).toString()), fechaDeIso(rango.value(QStringLiteral("hasta")).toString()));
+}
+
+QVariantMap Controlador::reporteFechas(const QString& desdeIso, const QString& hastaIso) const
+{
+    QDate desde = fechaDeIso(desdeIso), hasta = fechaDeIso(hastaIso);
+    if (!desde.isValid()) desde = QDate::currentDate();
+    if (!hasta.isValid()) hasta = desde;
+    if (desde > hasta) std::swap(desde, hasta);
+    return armarReporte(desde, hasta);
+}
+
+QVariantMap Controlador::armarReporte(const QDate& desde, const QDate& hasta) const
+{
     const Reporte r = stock_.reporte(desde, hasta);
     QVariantList masVendidos;
     for (const ProductoVendido& p : r.masVendidos)

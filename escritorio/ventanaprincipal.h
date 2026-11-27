@@ -43,11 +43,13 @@ public:
     int columnaDe(const char* clave) const;                               // lugar en la tabla de una columna del programa (o -1)
     ServidorSinc& servidor() { return *servidor_; }
     QString textoResumen() const;                                         // «12 productos · 1 con stock bajo…» (abajo)
-    void confirmarEliminados();                                           // borra ya lo que espera el «Deshacer»
+    void deshacerEliminar(const QList<Producto>& eliminados);             // lo que hace «Deshacer» después de eliminar
+    void codigoLeido(const QString& codigo);                              // Enter en el buscador (lector USB): ¿crear el producto?
 
 public slots:
     void refrescar();             // vuelve a leer la base SIN perder la posición ni la selección
     void agregar();
+    void agregar(const QString& codigo);   // producto nuevo con ese código ya puesto
     void editar();
     void eliminar();
     void venta();
@@ -59,6 +61,7 @@ public slots:
     void columnas();              // ventana para agregar, renombrar, ordenar y eliminar columnas
     void abrirSincronizacion();   // ventana para emparejar el celular
     void abrirReportes(bool avisos = false);   // ventas, ganancia y avisos de stock y vencimientos
+    void historial();             // ventas y compras hechas, con su detalle; se pueden anular
     void actualizarAvisos();      // el aviso arriba de la tabla («⚠ 3 avisos: …»)
     void copiar();                // Ctrl+C: los renglones seleccionados al portapapeles
     void pegar();                 // Ctrl+V: los renglones del portapapeles como productos nuevos
@@ -102,7 +105,6 @@ private:
     QPushButton* chipBajos_ = nullptr;               // abajo: con poco stock, vencidos y por vencer (abren los avisos)
     QPushButton* chipVencidos_ = nullptr;
     QPushButton* chipPorVencer_ = nullptr;
-    QSet<qint64> porEliminar_;                       // eliminados que todavía se pueden recuperar con «Deshacer»
 
     // Para no perder el lugar cuando se busca
     bool buscando_ = false;

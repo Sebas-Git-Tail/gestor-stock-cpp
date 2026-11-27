@@ -308,3 +308,39 @@ QList<Producto> filtrarProductos(const QList<Producto>& todos, const QString& co
     }
     return salida;
 }
+
+// ---------------------------------------------------------------------- exportar
+
+QString campoCsv(const QString& s)
+{
+    if (!s.contains(QLatin1Char(';')) && !s.contains(QLatin1Char('"')) && !s.contains(QLatin1Char('\n'))) return s;
+    QString c = s;
+    c.replace(QLatin1Char('"'), QStringLiteral("\"\""));
+    return QLatin1Char('"') + c + QLatin1Char('"');
+}
+
+QByteArray csvDeProductos(const QList<Producto>& productos, const QList<Columna>& propias)
+{
+    const auto renglon = [](const QStringList& campos) {
+        QStringList salida;
+        for (const QString& c : campos) salida << campoCsv(c);
+        return salida.join(QLatin1Char(';')) + QLatin1Char('\n');
+    };
+    QStringList titulos = {QStringLiteral("Código"), QStringLiteral("Nombre"), QStringLiteral("Categoría"), QStringLiteral("Proveedor"),
+                           QStringLiteral("Cantidad"), QStringLiteral("Precios"), QStringLiteral("Medida bolsa"), QStringLiteral("Vencimiento"),
+                           QStringLiteral("Stock mínimo"), QStringLiteral("Notas")};
+    for (const Columna& c : propias) titulos << c.nombre;
+    QString texto = renglon(titulos);
+    for (const Producto& p : productos) {
+        QStringList precios;
+        for (const Precio& pr : p.precios)
+            precios << (pr.presentacion.isEmpty() ? QString::number(pr.precio, 'g', 15)
+                                                  : pr.presentacion + QStringLiteral(": ") + QString::number(pr.precio, 'g', 15));
+        QStringList campos = {p.codigo, p.nombre, p.categoria, p.proveedor, QString::number(p.cantidad),
+                              precios.join(QStringLiteral(" | ")), p.medidaBolsa, p.vencimiento,
+                              QString::number(p.stockMinimo), p.notas};
+        for (const Columna& c : propias) campos << textoValorColumna(c.tipo, p.extra.value(c.uuid));
+        texto += renglon(campos);
+    }
+    return QByteArrayLiteral("\xEF\xBB\xBF") + texto.toUtf8();
+}

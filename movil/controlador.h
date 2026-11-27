@@ -2,6 +2,7 @@
 #include "db.h"
 #include <QObject>
 #include <QTimer>
+#include <QUrl>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QtQml/qqmlregistration.h>
@@ -39,6 +40,7 @@ class Controlador : public QObject
     Q_PROPERTY(QVariantList alertas READ alertas NOTIFY cambio)          // poco stock, vencidos y por vencer
     Q_PROPERTY(QString resumenAlertas READ resumenAlertas NOTIFY cambio)  // "2 con poco stock · 1 por vencer"
     Q_PROPERTY(bool puedeEscanear READ puedeEscanear CONSTANT)           // lector de códigos de barras (solo Android)
+    Q_PROPERTY(QStringList mediosDePago READ mediosDePago CONSTANT)       // los que se ofrecen en la venta
 
 public:
     explicit Controlador(Stock& stock, QObject* parent = nullptr);
@@ -66,11 +68,14 @@ public:
     QVariantList alertas() const;
     QString resumenAlertas() const;
     bool puedeEscanear() const;
+    QStringList mediosDePago() const { return ::mediosDePago(); }
 
     // ---- productos (filas). Los que devuelven QString dan "" si salió bien; si no, el error
     Q_INVOKABLE QVariantMap producto(qint64 id) const;        // para el editor; id 0 = uno vacío
     Q_INVOKABLE QString guardarProducto(const QVariantMap& datos);
-    Q_INVOKABLE QString eliminarProducto(qint64 id);
+    Q_INVOKABLE QString eliminarProducto(qint64 id);        // se puede deshacer (deshacerEliminar) hasta el próximo
+    Q_INVOKABLE QString deshacerEliminar();                 // vuelve el último eliminado, con los datos que tenía
+    Q_INVOKABLE qint64 idPorCodigo(const QString& codigo) const;   // 0 si ningún producto tiene ese código
     Q_INVOKABLE QVariantList buscarProductos(const QString& texto) const;   // para armar una venta o compra
 
     // ---- columnas
@@ -83,10 +88,27 @@ public:
     Q_INVOKABLE QString restaurarColumna(qint64 id);
 
     // ---- ventas y compras: lineas = [{id, cantidad, presentacion, precio}] -> {ok, error, total}
-    Q_INVOKABLE QVariantMap registrarOperacion(bool venta, const QVariantList& lineas);   // compra: "precio" = costo c/u (opcional)
+    // compra: "precio" = costo c/u (opcional). datos (solo venta, opcional): {medioPago, cliente, descuento}
+    Q_INVOKABLE QVariantMap registrarOperacion(bool venta, const QVariantList& lineas, const QVariantMap& datos = {});
+    // ---- historial. tipo: 0 todas, 1 ventas, 2 compras; fechas "AAAA-MM-DD" (vacías = sin límite)
+    Q_INVOKABLE QVariantList historial(int tipo, const QString& desde, const QString& hasta, bool conAnuladas) const;
+    Q_INVOKABLE QString anularOperacion(qint64 id);         // devuelve el stock y la deja anulada
 
     // ---- reportes. periodo: 0 hoy, 1 últimos 7 días, 2 este mes, 3 mes anterior, 4 este año
     Q_INVOKABLE QVariantMap reporte(int periodo) const;
+    Q_INVOKABLE QVariantMap reporteFechas(const QString& desde, const QString& hasta) const;   // "AAAA-MM-DD"
+    Q_INVOKABLE QVariantMap rangoPeriodo(int periodo) const;                                 // {desde, hasta} en "AAAA-MM-DD"
+
+    // ---- fechas para las pantallas
+    Q_INVOKABLE QString hoyIso() const { return QDate::currentDate().toString(Qt::ISODate); }
+    Q_INVOKABLE QString fechaIso(int diasAtras) const { return QDate::currentDate().addDays(-diasAtras).toString(Qt::ISODate); }
+    Q_INVOKABLE QString fechaCorta(const QString& iso) const;     // "26/11/2026"
+
+    // ---- archivos (en Android llegan como content://…)
+    Q_INVOKABLE QString exportar(const QUrl& archivo);      // la lista en CSV (para Excel)
+    Q_INVOKABLE QString backup(const QUrl& archivo);        // copia de la base
+    Q_INVOKABLE QString nombreExportacion() const;
+    Q_INVOKABLE QString nombreBackup() const;
 
     // ---- código de barras: abre el lector de Google (Play Services); el resultado llega por codigoEscaneado
     Q_INVOKABLE void escanearCodigo();
@@ -115,12 +137,15 @@ signals:
 
 private:
     void programarSincronizacion();                  // un rato después de cada cambio, si hay PC emparejada
+    QVariantMap armarReporte(const QDate& desde, const QDate& hasta) const;
     QString resultado(const Resultado& r);           // avisa al sincronizador y devuelve el error ("" si salió bien)
     static QVariantMap mapaColumna(const Columna& c);
 
     Stock& stock_;
     ClienteSinc* cliente_ = nullptr;
     QTimer temporizadorSinc_;
+    QTimer temporizadorCopia_;                       // copia diaria automática de la base
+    std::optional<Producto> ultimoEliminado_;        // para «Deshacer»
     bool sincEnSilencio_ = false;
     bool sincronizando_ = false;
     QString estadoSinc_;

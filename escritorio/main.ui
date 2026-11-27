@@ -168,6 +168,11 @@
     <string>Reportes y avisos…</string>
    </property>
   </action>
+  <action name="actionHistorial">
+   <property name="text">
+    <string>Historial de ventas y compras…</string>
+   </property>
+  </action>
   <action name="actionAcerca">
    <property name="text">
     <string>Acerca de</string>

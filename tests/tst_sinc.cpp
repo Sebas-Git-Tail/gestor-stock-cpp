@@ -452,6 +452,92 @@ private slots:
         QCOMPARE(s.listar().size(), 1);
         QCOMPARE(s.listar().first().nombre, QString("Bueno"));
     }
+    // ---------------------------------------------------------------- 2.10.0: anular, deshacer y datos de la venta
+    void anularEnElCelularLlegaALaPc()
+    {
+        Escenario e;
+        e.pc.crear(producto("Avena", 10, {}, {{"", 100}}));
+        QVERIFY(e.emparejar());
+        const ResultadoOperacion v = e.pc.registrarOperacion(TipoOperacion::Venta, {{idDe(e.pc, "Avena"), 4, QString(), 100}},
+                                                             {"Transferencia", "Juana", 50});
+        QVERIFY(v.ok);
+        QVERIFY(e.sincronizar().ok);
+        QCOMPARE(porNombre(e.cel, "Avena").cantidad, 6);
+        const Operacion enCel = e.cel.operaciones().first();
+        QCOMPARE(enCel.medioPago, QString("Transferencia"));       // medio de pago, cliente y descuento viajan
+        QCOMPARE(enCel.cliente, QString("Juana"));
+        QCOMPARE(enCel.descuento, 50.0);
+        QCOMPARE(enCel.total, 350.0);
+
+        QVERIFY(e.cel.anularOperacion(enCel.id).ok);
+        QCOMPARE(porNombre(e.cel, "Avena").cantidad, 10);
+        const ResultadoSinc r = e.sincronizar();
+        QVERIFY2(r.ok, qPrintable(r.mensaje));
+        QCOMPARE(porNombre(e.pc, "Avena").cantidad, 10);            // el stock volvió en la PC
+        QVERIFY(e.pc.operaciones().first().estaAnulada());          // y la venta quedó anulada
+        const QDate hoy = QDate::currentDate();
+        QCOMPARE(e.pc.reporte(hoy, hoy).ventas, 0.0);
+        QCOMPARE(resumen(e.pc), resumen(e.cel));
+        QVERIFY(e.sincronizar().ok);                                // no rebota ni se duplica
+        QCOMPARE(porNombre(e.pc, "Avena").cantidad, 10);
+        QCOMPARE(porNombre(e.cel, "Avena").cantidad, 10);
+    }
+
+    void anularEnLosDosLadosDevuelveElStockUnaSolaVez()
+    {
+        Escenario e;
+        e.pc.crear(producto("Avena", 10));
+        QVERIFY(e.emparejar());
+        e.pc.registrarOperacion(TipoOperacion::Venta, {{idDe(e.pc, "Avena"), 3, QString(), 100}});
+        QVERIFY(e.sincronizar().ok);
+        QVERIFY(e.pc.anularOperacion(e.pc.operaciones().first().id).ok);
+        QVERIFY(e.cel.anularOperacion(e.cel.operaciones().first().id).ok);   // antes de sincronizar
+        QVERIFY(e.sincronizar().ok);
+        QCOMPARE(porNombre(e.pc, "Avena").cantidad, 10);            // no 13
+        QCOMPARE(porNombre(e.cel, "Avena").cantidad, 10);
+        QVERIFY(e.pc.operaciones().first().estaAnulada());
+        QVERIFY(e.cel.operaciones().first().estaAnulada());
+    }
+
+    void unaVersionViejaRecibeLaAnulacionConElStockBien()
+    {
+        // La 2.9.x no conoce «anul»: lo ignora, pero recibe los ajustes y el stock le queda bien
+        Stock pc(":memory:"), vieja(":memory:");
+        pc.crear(producto("Avena", 10));
+        pc.registrarOperacion(TipoOperacion::Venta, {{idDe(pc, "Avena"), 3, QString(), 100}}, {"Efectivo", "", 0});
+        QVERIFY(vieja.aplicarCambios(pc.cambiosDesde(0)).ok);
+        QCOMPARE(porNombre(vieja, "Avena").cantidad, 7);
+        const qint64 hasta = pc.secuencia();
+        QVERIFY(pc.anularOperacion(pc.operaciones().first().id).ok);
+        QJsonArray filas;
+        for (const QJsonValue& v : pc.cambiosDesde(hasta)) {
+            QJsonObject o = v.toObject();
+            for (const char* nuevo : {"anul", "mp", "cli", "desc"}) o.remove(QLatin1String(nuevo));   // como si no los entendiera
+            filas.append(o);
+        }
+        QVERIFY(vieja.aplicarCambios(filas).ok);
+        QCOMPARE(porNombre(vieja, "Avena").cantidad, 10);
+        QVERIFY(!vieja.operaciones().first().estaAnulada());
+    }
+
+    void deshacerEliminarLlegaAlOtroLado()
+    {
+        Escenario e;
+        e.pc.crear(producto("Avena", 10, "A1", {{"500 g", 1900}, {"1 kg", 3500}}));
+        QVERIFY(e.emparejar());
+        const Producto antes = porNombre(e.pc, "Avena");
+        QVERIFY(e.pc.eliminar(antes.id).ok);
+        QVERIFY(e.sincronizar().ok);
+        QVERIFY(e.cel.listar().isEmpty());                          // el celular ya se enteró del borrado
+        QVERIFY(e.pc.restaurar(antes).ok);
+        QVERIFY(e.sincronizar().ok);
+        const Producto enCel = porNombre(e.cel, "Avena");
+        QCOMPARE(enCel.uuid, antes.uuid);
+        QCOMPARE(enCel.cantidad, 10);
+        QCOMPARE(enCel.codigo, QString("A1"));
+        QCOMPARE(enCel.precios.size(), 2);
+        QCOMPARE(resumen(e.pc), resumen(e.cel));
+    }
 };
 
 QTEST_MAIN(TstSinc)

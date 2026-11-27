@@ -53,6 +53,12 @@ DialogoProducto::DialogoProducto(const QStringList& categorias, const QStringLis
 
 DialogoProducto::~DialogoProducto() = default;
 
+void DialogoProducto::fijarCodigo(const QString& codigo)
+{
+    ui->inputCodigo->setText(codigo);
+    ui->inputNombre->setFocus();                  // lo que falta escribir es el nombre
+}
+
 // Títulos de las columnas, campos de las que se quitaron (escondidos) y un campo por cada columna propia
 void DialogoProducto::armarColumnas(const QList<Columna>& columnas, const Producto* producto)
 {

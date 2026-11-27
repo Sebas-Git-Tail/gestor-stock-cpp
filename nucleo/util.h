@@ -44,3 +44,9 @@ std::optional<FiltroPrecio> interpretarFiltroPrecio(const QString& token);
 // columnas propias o algún precio)
 bool productoCoincide(const Producto& p, const QString& consulta);
 QList<Producto> filtrarProductos(const QList<Producto>& todos, const QString& consulta);
+
+// ---- exportar (la PC y el celular)
+QString campoCsv(const QString& s);                         // entre comillas si tiene ; " o un salto de línea
+// La lista en CSV para Excel/LibreOffice: separado con «;», en UTF-8 con BOM (para que respete las tildes),
+// las columnas del programa y después las propias
+QByteArray csvDeProductos(const QList<Producto>& productos, const QList<Columna>& propias);

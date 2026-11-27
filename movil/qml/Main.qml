@@ -5,6 +5,7 @@ import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
 import Comun.Ui
+import QtQuick.Dialogs
 import GestorStock
 
 ApplicationWindow {
@@ -43,11 +44,25 @@ ApplicationWindow {
     // Código de barras leído desde la pantalla principal: se busca (en la de venta/compra lo maneja esa página)
     Connections {
         target: App
-        function onCodigoEscaneado(codigo) { if (codigo !== "" && pila.depth === 1) App.busqueda = codigo }
+        function onCodigoEscaneado(codigo) {
+            if (codigo === "" || pila.depth !== 1) return
+            // Si ningún producto tiene ese código, se ofrece crearlo con el código ya puesto
+            if (App.idPorCodigo(codigo) === 0 && App.buscarProductos(codigo).length === 0) {
+                crearConCodigo.codigo = codigo
+                crearConCodigo.open()
+            } else {
+                App.busqueda = codigo
+            }
+        }
     }
 
     // Mensajito abajo («Guardado», «Sincronizado…»): AvisoFlotante de Comun.Ui
     function avisar(texto) { aviso.mostrar(texto) }
+    // Producto eliminado: se puede traer de vuelta (como en la PC)
+    function avisarEliminado(nombre) {
+        aviso.mostrar("Se eliminó «" + nombre + "»", { textoBoton: "Deshacer", milisegundos: 7000,
+                      alBoton: function() { const e = App.deshacerEliminar(); ventana.avisar(e === "" ? "Listo, volvió «" + nombre + "»" : e) } })
+    }
     Connections { target: App; function onAviso(texto) { ventana.avisar(texto) } }
     AvisoFlotante { id: aviso; margenAbajo: 90 }
 
@@ -97,7 +112,10 @@ ApplicationWindow {
                     { texto: "Columnas de la tabla", accion: "columnas" },
                     { texto: "Registrar una venta", accion: "venta" },
                     { texto: "Registrar una compra", accion: "compra" },
+                    { texto: "Historial de ventas y compras", accion: "historial" },
                     { texto: "Reportes y avisos", accion: "reportes" },
+                    { texto: "Exportar CSV", accion: "exportar" },
+                    { texto: "Copia de seguridad", accion: "backup" },
                     { texto: "Sincronizar con la PC", accion: "sinc" },
                     { texto: "Apps y actualizaciones", accion: "apps" },
                     { texto: "Acerca de", accion: "acerca" }
@@ -129,11 +147,15 @@ ApplicationWindow {
         else if (accion === "compra") pila.push(paginaOperacion, { venta: false })
         else if (accion === "sinc") pila.push(paginaSinc)
         else if (accion === "reportes") pila.push(paginaReportes)
+        else if (accion === "historial") pila.push(paginaHistorial)
+        else if (accion === "exportar") { elegirExportar.selectedFile = elegirExportar.currentFolder + "/" + App.nombreExportacion(); elegirExportar.open() }
+        else if (accion === "backup") { elegirBackup.selectedFile = elegirBackup.currentFolder + "/" + App.nombreBackup(); elegirBackup.open() }
         else if (accion === "avisos") pila.push(paginaReportes, { verAvisos: true })
         else if (accion === "apps") pila.push(paginaApps)
         else if (accion === "acerca") acerca.open()
     }
     function editar(id) { pila.push(editor, { idProducto: id }) }
+    function crearConElCodigo(codigo) { App.busqueda = ""; pila.push(editor, { idProducto: 0, codigoInicial: codigo }) }
 
     StackView { id: pila; anchors.fill: parent; initialItem: principal }
 
@@ -210,6 +232,45 @@ ApplicationWindow {
     Component { id: paginaOperacion; PaginaOperacion {} }
     Component { id: paginaSinc; PaginaSincronizacion {} }
     Component { id: paginaReportes; PaginaReportes {} }
+    Component { id: paginaHistorial; PaginaHistorial {} }
+
+    // ---------------------------------------------------------------- archivos (como en ingresos-gastos)
+    FileDialog {
+        id: elegirExportar
+        title: "Guardar la lista en CSV"
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "csv"
+        nameFilters: ["CSV (*.csv)"]
+        onAccepted: { const e = App.exportar(selectedFile); if (e !== "") ventana.avisar("No se pudo guardar: " + e) }
+    }
+    FileDialog {
+        id: elegirBackup
+        title: "Guardar copia de seguridad"
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "db"
+        nameFilters: ["Base de datos (*.db)"]
+        onAccepted: { const e = App.backup(selectedFile); if (e !== "") ventana.avisar("No se pudo guardar: " + e) }
+    }
+
+    Dialog {
+        id: crearConCodigo
+        property string codigo: ""
+        title: "Código nuevo"
+        modal: true
+        anchors.centerIn: parent
+        width: Math.min(ventana.width - 32, 380)
+        standardButtons: Dialog.Cancel
+        ColumnLayout {
+            width: parent.width
+            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: "Ningún producto tiene el código " + crearConCodigo.codigo + "." }
+            Button {
+                Layout.fillWidth: true
+                text: "Crear producto con este código"
+                highlighted: true
+                onClicked: { crearConCodigo.close(); ventana.crearConElCodigo(crearConCodigo.codigo) }
+            }
+        }
+    }
     // Lo nuevo de esta versión: se abre solo la primera vez (comun/ui/qml/DialogoNovedades.qml)
     DialogoNovedades { id: novedades }
 

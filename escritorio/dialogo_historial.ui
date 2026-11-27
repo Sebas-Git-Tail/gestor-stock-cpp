@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>DialogoHistorial</class>
+ <widget class="QDialog" name="DialogoHistorial">
+  <property name="windowTitle">
+   <string>Historial de ventas y compras</string>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>900</width>
+    <height>560</height>
+   </size>
+  </property>
+  <layout class="QVBoxLayout" name="layoutPrincipal">
+   <item>
+    <layout class="QHBoxLayout" name="layoutFiltros">
+     <item>
+      <widget class="QComboBox" name="comboTipo"/>
+     </item>
+     <item>
+      <widget class="QLabel" name="labelDesde">
+       <property name="text">
+        <string>Desde:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDateEdit" name="editDesde">
+       <property name="calendarPopup">
+        <bool>true</bool>
+       </property>
+       <property name="displayFormat">
+        <string>dd/MM/yyyy</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="labelHasta">
+       <property name="text">
+        <string>Hasta:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDateEdit" name="editHasta">
+       <property name="calendarPopup">
+        <bool>true</bool>
+       </property>
+       <property name="displayFormat">
+        <string>dd/MM/yyyy</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QCheckBox" name="checkAnuladas">
+       <property name="text">
+        <string>Mostrar las anuladas</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="espaciadorFiltros">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QTreeWidget" name="arbol">
+     <property name="alternatingRowColors">
+      <bool>true</bool>
+     </property>
+     <property name="uniformRowHeights">
+      <bool>true</bool>
+     </property>
+     <column>
+      <property name="text">
+       <string>Fecha</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Tipo</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Detalle</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Total</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Estado</string>
+      </property>
+     </column>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="labelResumen">
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="layoutPie">
+     <item>
+      <widget class="QPushButton" name="btnAnular">
+       <property name="text">
+        <string>Anular…</string>
+       </property>
+       <property name="toolTip">
+        <string>Anula la venta o compra elegida (también sirve para una devolución): el stock vuelve a como estaba y los reportes ya no la cuentan</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="espaciadorPie">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QDialogButtonBox" name="buttonBox">
+       <property name="standardButtons">
+        <set>QDialogButtonBox::Close</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>buttonBox</sender>
+   <signal>rejected()</signal>
+   <receiver>DialogoHistorial</receiver>
+   <slot>reject()</slot>
+  </connection>
+ </connections>
+</ui>

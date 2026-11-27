@@ -34,6 +34,7 @@ Page {
         }
         ListView {
             id: lista
+            objectName: "listaColumnas"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true

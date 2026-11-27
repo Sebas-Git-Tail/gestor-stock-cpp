@@ -88,6 +88,15 @@ DialogoOperacion::DialogoOperacion(TipoOperacion tipo, const QList<Producto>& pr
     connect(ui->inputBuscarProducto, &QLineEdit::returnPressed, this, &DialogoOperacion::agregarDesdeBuscador);
     connect(ui->btnQuitarLinea, &QPushButton::clicked, this, &DialogoOperacion::quitarLinea);
 
+    // Venta: medio de pago, cliente y descuento, todo opcional
+    ui->comboMedioPago->addItem(QString());
+    ui->comboMedioPago->addItems(mediosDePago());
+    ui->comboMedioPago->lineEdit()->setPlaceholderText(tr("(opcional)"));
+    connect(ui->spinDescuento, &QDoubleSpinBox::valueChanged, this, [this](double) { recalcular(); });
+    for (QWidget* w : std::initializer_list<QWidget*>{ui->labelMedioPago, ui->comboMedioPago, ui->labelCliente, ui->inputCliente,
+                                                     ui->labelDescuento, ui->spinDescuento})
+        w->setVisible(venta_);
+
     for (qint64 id : preseleccion) agregarProducto(id);
     recalcular();
 }
@@ -243,8 +252,16 @@ void DialogoOperacion::recalcular()
         if (sinStock) todoBien = false;
     }
     total = std::round(total * 100.0) / 100.0;
-    ui->labelTotal->setText(venta_ ? tr("Total: %1").arg(formatearPrecio(total))
-                                   : tr("Total de la compra: %1").arg(formatearPrecio(total)));
+    const double descuento = venta_ ? ui->spinDescuento->value() : 0;
+    if (descuento > total) todoBien = false;      // no puede quedar negativo
+    if (!venta_)
+        ui->labelTotal->setText(tr("Total de la compra: %1").arg(formatearPrecio(total)));
+    else if (descuento > 0)
+        ui->labelTotal->setText(tr("%1 − descuento %2 = Total: %3").arg(formatearPrecio(total), formatearPrecio(descuento),
+                                                                       descuento > total ? tr("(el descuento es mayor)")
+                                                                                         : formatearPrecio(total - descuento)));
+    else
+        ui->labelTotal->setText(tr("Total: %1").arg(formatearPrecio(total)));
     ui->buttonBox->button(QDialogButtonBox::Ok)->setEnabled(todoBien);
 }
 
@@ -252,7 +269,21 @@ double DialogoOperacion::total() const
 {
     double total = 0;
     for (int f = 0; f < ui->tablaLineas->rowCount(); ++f) total += spinCantidad(f)->value() * spinPrecio(f)->value();
+    if (venta_) total -= ui->spinDescuento->value();
     return std::round(total * 100.0) / 100.0;
+}
+
+DatosVenta DialogoOperacion::datosVenta() const
+{
+    if (!venta_) return {};
+    return {ui->comboMedioPago->currentText().simplified(), ui->inputCliente->text().simplified(), ui->spinDescuento->value()};
+}
+
+void DialogoOperacion::fijarDatosVenta(const DatosVenta& d)
+{
+    ui->comboMedioPago->setCurrentText(d.medioPago);
+    ui->inputCliente->setText(d.cliente);
+    ui->spinDescuento->setValue(d.descuento);
 }
 
 QList<LineaOperacion> DialogoOperacion::lineas() const
