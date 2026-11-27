@@ -39,6 +39,7 @@
 #include <unistd.h>
 #endif
 #ifdef Q_OS_ANDROID
+#include <QJniEnvironment>
 #include <QJniObject>
 #endif
 
@@ -232,7 +233,102 @@ QString leerTexto(const QString &ruta, qint64 maximo = 64 * 1024)
     return QString::fromUtf8(f.readAll());
 }
 
+// Motivos de ApplicationExitInfo (Android 11+) y la importancia «en caché» (la app no se veía ni tenía
+// un servicio en primer plano)
+enum MotivoAndroid {
+    MotivoDesconocido = 0, SalioSola = 1, Senal = 2, PocaMemoria = 3, ExcepcionJava = 4, FallaNativa = 5,
+    NoRespondia = 6, NoArranco = 7, CambioDePermiso = 8, DemasiadosRecursos = 9, PedidoPorLaPersona = 10,
+    DetenidaPorLaPersona = 11, MurioDependencia = 12, Otro = 13, Congelada = 14, CambioDelPaquete = 15,
+    Actualizada = 16, Anomalia = 17
+};
+constexpr int ImportanciaEnCache = 400;
+
+#ifdef Q_OS_ANDROID
+QString textoMotivoAndroid(int motivo)
+{
+    switch (motivo) {
+    case ExcepcionJava: return QStringLiteral("excepción de Java");
+    case FallaNativa: return QStringLiteral("falla nativa");
+    case NoRespondia: return QStringLiteral("la app no respondía (ANR)");
+    case NoArranco: return QStringLiteral("no pudo arrancar");
+    case DemasiadosRecursos: return QStringLiteral("usaba demasiados recursos");
+    case Anomalia: return QStringLiteral("anomalía de recursos");
+    case Senal: return QStringLiteral("señal");
+    default: return QStringLiteral("motivo %1").arg(motivo);
+    }
+}
+
+struct SalidaAndroid
+{
+    int motivo = -1;           // -1: el sistema no sabe (o es Android 10 o anterior)
+    int importancia = 0;
+    int estado = 0;            // la señal, si fue una
+    QString descripcion;
+};
+
+// ActivityManager.getHistoricalProcessExitReasons(null, pid, 1): por qué terminó ese proceso de esta app
+SalidaAndroid salidaAndroid(qint64 pid)
+{
+    SalidaAndroid s;
+    if (QNativeInterface::QAndroidApplication::sdkVersion() < 30)
+        return s;
+    QJniEnvironment entorno;
+    const QJniObject contexto(QNativeInterface::QAndroidApplication::context());
+    const QJniObject servicio = contexto.callObjectMethod("getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;",
+                                                          QJniObject::fromString(QStringLiteral("activity")).object<jstring>());
+    if (entorno.checkAndClearExceptions() || !servicio.isValid())
+        return s;
+    const QJniObject lista = servicio.callObjectMethod("getHistoricalProcessExitReasons",
+                                                       "(Ljava/lang/String;II)Ljava/util/List;",
+                                                       static_cast<jstring>(nullptr), jint(pid), jint(1));
+    if (entorno.checkAndClearExceptions() || !lista.isValid())
+        return s;
+    const jint cantidad = lista.callMethod<jint>("size", "()I");
+    if (entorno.checkAndClearExceptions() || cantidad <= 0)
+        return s;
+    const QJniObject info = lista.callObjectMethod("get", "(I)Ljava/lang/Object;", jint(0));
+    if (entorno.checkAndClearExceptions() || !info.isValid())
+        return s;
+    s.motivo = info.callMethod<jint>("getReason", "()I");
+    s.importancia = info.callMethod<jint>("getImportance", "()I");
+    s.estado = info.callMethod<jint>("getStatus", "()I");
+    s.descripcion = info.callObjectMethod("getDescription", "()Ljava/lang/String;").toString();
+    if (entorno.checkAndClearExceptions())
+        s.motivo = -1;
+    return s;
+}
+#endif
+
 } // namespace
+
+CierreAndroid evaluarCierreAndroid(int motivo, int importancia)
+{
+    switch (motivo) {
+    case ExcepcionJava:
+    case FallaNativa:
+    case NoRespondia:
+    case NoArranco:
+    case DemasiadosRecursos:
+    case Anomalia:
+        return CierreAndroid::Falla;
+    case SalioSola:            // salió por su cuenta (Qt a veces termina así al cerrar la última ventana)
+    case PocaMemoria:
+    case CambioDePermiso:      // por ejemplo, le sacaron el acceso a los archivos en Ajustes
+    case PedidoPorLaPersona:   // la deslizaron en Recientes o «Forzar detención»
+    case DetenidaPorLaPersona:
+    case MurioDependencia:
+    case Congelada:
+    case CambioDelPaquete:
+    case Actualizada:
+        return CierreAndroid::NoEsFalla;
+    case Senal:
+    case Otro:
+        // El sistema la mató sin dar un motivo claro: si no se veía (en caché), es limpieza de segundo plano
+        return importancia >= ImportanciaEnCache ? CierreAndroid::NoEsFalla : CierreAndroid::NoSe;
+    default:
+        return CierreAndroid::NoSe;
+    }
+}
 
 QString limpiar(const QString &texto)
 {
@@ -381,12 +477,34 @@ void Fallas::revisarCierreAnterior()
         const QString senal = rutaProceso(carpeta_, pid, "senal");
         const QString registro = rutaProceso(carpeta_, pid, "registro");
         const QString textoSenal = leerTexto(senal).trimmed();
-        if (!textoSenal.isEmpty() || QFileInfo::exists(marca)) {
+        bool falla = !textoSenal.isEmpty() || QFileInfo::exists(marca);
+        QString detalle = textoSenal.isEmpty() ? QStringLiteral("La app se cerró sin terminar bien")
+                                               : QStringLiteral("La app se cerró por una falla (%1)").arg(textoSenal);
+#ifdef Q_OS_ANDROID
+        // Lo que dice Android manda sobre la marca (la señal, que la escribió la app misma, gana siempre)
+        const SalidaAndroid salida = salidaAndroid(pid);
+        switch (evaluarCierreAndroid(salida.motivo, salida.importancia)) {
+        case CierreAndroid::Falla: {
+            falla = true;
+            QString motivo = textoMotivoAndroid(salida.motivo);
+            if (!salida.descripcion.trimmed().isEmpty())
+                motivo += QStringLiteral(": ") + limpiar(salida.descripcion.trimmed()).left(300);
+            detalle = textoSenal.isEmpty() ? QStringLiteral("La app se cerró por una falla (%1)").arg(motivo)
+                                           : QStringLiteral("La app se cerró por una falla (%1; %2)").arg(textoSenal, motivo);
+            break;
+        }
+        case CierreAndroid::NoEsFalla:
+            if (textoSenal.isEmpty())
+                falla = false;
+            break;
+        case CierreAndroid::NoSe:
+            break;
+        }
+#endif
+        if (falla) {
             QStringList lineas = leerTexto(registro).split(u'\n', Qt::SkipEmptyParts);
             if (lineas.size() > MaxRenglones)
                 lineas = lineas.mid(lineas.size() - MaxRenglones);
-            const QString detalle = textoSenal.isEmpty() ? QStringLiteral("La app se cerró sin terminar bien")
-                                                         : QStringLiteral("La app se cerró por una falla (%1)").arg(textoSenal);
             guardarInforme(QStringLiteral("cierre"), QStringLiteral("cierre"), detalle, lineas);
         }
         QFile::remove(marca);

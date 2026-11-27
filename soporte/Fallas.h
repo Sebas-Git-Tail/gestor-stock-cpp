@@ -11,7 +11,10 @@
 //   - lo que la app avise con informar()
 // El resto de qWarning/qInfo solo queda en el registro (los últimos ~300 renglones), que va con el informe.
 //
-// En Android, si el sistema cierra la app en segundo plano no cuenta como falla.
+// En Android, si el sistema cierra la app en segundo plano no cuenta como falla. Desde Android 11 además se le
+// pregunta al sistema por qué terminó cada proceso (ApplicationExitInfo): si lo cerró la persona (deslizándola
+// en Recientes, «Forzar detención»), si faltaba memoria o si se actualizó la app, no es una falla aunque la app
+// estuviera abierta; un ANR (la app no respondía) o una excepción de Java sí, aunque estuviera en segundo plano.
 // Los informes que no se pudieron mandar (sin conexión) quedan guardados y se mandan la próxima vez.
 // Como mucho 8 informes por día y el mismo error una sola vez por versión.
 //
@@ -35,6 +38,12 @@ void iniciarFallas();
 // Una falla que la app detectó (no se cerró, pero no debería haber pasado). contexto: «sincronizar»,
 // «qml», «actualizar»...
 void informar(const QString &contexto, const QString &detalle);
+
+// Android: si un proceso que terminó cuenta como falla, según el motivo que da el sistema (getReason() de
+// ApplicationExitInfo) y qué tan visible estaba (getImportance()). «NoSe»: decide la marca, como antes.
+// Está acá (y no escondida en Fallas.cpp) para poder probarla en Linux.
+enum class CierreAndroid { Falla, NoEsFalla, NoSe };
+CierreAndroid evaluarCierreAndroid(int motivo, int importancia);
 
 // Saca de un texto lo que no tiene que viajar: carpeta personal → «~», nombre de usuario, direcciones web
 // (queda solo el sitio), correos.

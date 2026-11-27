@@ -225,6 +225,24 @@ private slots:
         borrarPendientes();
     }
 
+    void cierresAndroid()
+    {
+        // Motivos de ApplicationExitInfo: 4 excepción de Java, 5 nativa, 6 ANR, 10 la cerró la persona,
+        // 3 poca memoria, 1 salió sola, 8 cambio de permiso, 2 señal, 13 otro, 0 desconocido
+        QCOMPARE(evaluarCierreAndroid(6, 100), CierreAndroid::Falla);
+        QCOMPARE(evaluarCierreAndroid(4, 400), CierreAndroid::Falla);      // aunque estuviera en segundo plano
+        QCOMPARE(evaluarCierreAndroid(5, 125), CierreAndroid::Falla);
+        QCOMPARE(evaluarCierreAndroid(10, 100), CierreAndroid::NoEsFalla); // aunque estuviera abierta
+        QCOMPARE(evaluarCierreAndroid(3, 100), CierreAndroid::NoEsFalla);
+        QCOMPARE(evaluarCierreAndroid(1, 100), CierreAndroid::NoEsFalla);
+        QCOMPARE(evaluarCierreAndroid(8, 100), CierreAndroid::NoEsFalla);
+        QCOMPARE(evaluarCierreAndroid(2, 400), CierreAndroid::NoEsFalla);  // limpieza de segundo plano
+        QCOMPARE(evaluarCierreAndroid(13, 1000), CierreAndroid::NoEsFalla);
+        QCOMPARE(evaluarCierreAndroid(2, 100), CierreAndroid::NoSe);       // a la vista: decide la marca
+        QCOMPARE(evaluarCierreAndroid(0, 100), CierreAndroid::NoSe);
+        QCOMPARE(evaluarCierreAndroid(-1, 0), CierreAndroid::NoSe);        // Android 10 o sin datos
+    }
+
     void criticoYQmlUnaVez()
     {
         borrarPendientes();
