@@ -37,6 +37,14 @@ Page {
         if (r.ok) { ventana.avisar(venta ? "Venta registrada: " + r.total : "Compra registrada: el stock ya está actualizado"); pila.pop() }
         else error.text = r.error
     }
+    // Al volver de crear el producto del código escaneado, entra directo en la operación. Va en la página:
+    // StackView.onActivated solo llega al elemento que se apiló, no a los de adentro
+    StackView.onActivated: {
+        if (pagina.codigoPendiente === "") return
+        const r = App.buscarProductos(pagina.codigoPendiente)
+        pagina.codigoPendiente = ""
+        if (r.length === 1) pagina.agregar(r[0])
+    }
 
     header: ToolBar {
         Material.foreground: "white"
@@ -72,13 +80,6 @@ Page {
                 else if (r.length === 0) { crearConCodigo.codigo = codigo; crearConCodigo.open() }
                 else campoBuscar.text = codigo
             }
-        }
-        // Al volver de crear el producto del código escaneado, entra directo en la operación
-        StackView.onActivated: {
-            if (pagina.codigoPendiente === "") return
-            const r = App.buscarProductos(pagina.codigoPendiente)
-            pagina.codigoPendiente = ""
-            if (r.length === 1) pagina.agregar(r[0])
         }
         ListView {
             Layout.fillWidth: true
